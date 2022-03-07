@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
-from kasa import SmartBulb
+from kasa import SmartDevice
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -41,7 +41,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up switches."""
     coordinator: TPLinkDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    device = cast(SmartBulb, coordinator.device)
+    device = coordinator.device
     if device.is_bulb or device.is_light_strip or device.is_dimmer:
         async_add_entities([TPLinkSmartBulb(device, coordinator)])
 
@@ -50,11 +50,10 @@ class TPLinkSmartBulb(CoordinatedTPLinkEntity, LightEntity):
     """Representation of a TPLink Smart Bulb."""
 
     coordinator: TPLinkDataUpdateCoordinator
-    device: SmartBulb
 
     def __init__(
         self,
-        device: SmartBulb,
+        device: SmartDevice,
         coordinator: TPLinkDataUpdateCoordinator,
     ) -> None:
         """Initialize the switch."""

@@ -38,6 +38,11 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import TPLinkDataUpdateCoordinator
+from .migration import (
+    async_migrate_entities_devices,
+    async_migrate_legacy_entries,
+    async_migrate_yaml_entries,
+)
 
 DISCOVERY_INTERVAL = timedelta(minutes=15)
 
@@ -116,6 +121,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     discovered_devices = await async_discover_devices(hass)
     hosts_by_mac = {mac: device.host for mac, device in discovered_devices.items()}
 
+    if legacy_entry:
+        async_migrate_legacy_entries(
+            hass, hosts_by_mac, config_entries_by_mac, legacy_entry
+        )
+        # Migrate the yaml entry that was previously imported
+        async_migrate_yaml_entries(hass, legacy_entry.data)
+
+    if conf is not None:
+        async_migrate_yaml_entries(hass, conf)
+
     if discovered_devices:
         async_trigger_discovery(hass, discovered_devices)
 
@@ -139,6 +154,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if async_entry_is_legacy(config_entry):
             legacy_entry = config_entry
             break
+
+    if legacy_entry is not None:
+        await async_migrate_entities_devices(hass, legacy_entry.entry_id, entry)
 
     try:
         device: SmartDevice = await Discover.discover_single(entry.data[CONF_HOST])

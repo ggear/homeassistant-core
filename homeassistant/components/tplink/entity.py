@@ -1,11 +1,9 @@
 """Common code for tplink."""
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Coroutine
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 from kasa import SmartDevice
-from typing_extensions import Concatenate, ParamSpec
 
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
@@ -14,20 +12,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import TPLinkDataUpdateCoordinator
 
-_T = TypeVar("_T", bound="CoordinatedTPLinkEntity")
-_P = ParamSpec("_P")
+WrapFuncType = TypeVar("WrapFuncType", bound=Callable[..., Any])
 
 
-def async_refresh_after(
-    func: Callable[Concatenate[_T, _P], Awaitable[None]]  # type: ignore[misc]
-) -> Callable[Concatenate[_T, _P], Coroutine[Any, Any, None]]:  # type: ignore[misc]
+def async_refresh_after(func: WrapFuncType) -> WrapFuncType:
     """Define a wrapper to refresh after."""
 
-    async def _async_wrap(self: _T, *args: _P.args, **kwargs: _P.kwargs) -> None:
+    async def _async_wrap(
+        self: CoordinatedTPLinkEntity, *args: Any, **kwargs: Any
+    ) -> None:
         await func(self, *args, **kwargs)
         await self.coordinator.async_request_refresh_without_children()
 
-    return _async_wrap
+    return cast(WrapFuncType, _async_wrap)
 
 
 class CoordinatedTPLinkEntity(CoordinatorEntity):
@@ -54,7 +51,6 @@ class CoordinatedTPLinkEntity(CoordinatorEntity):
             model=self.device.model,
             name=self.device.alias,
             sw_version=self.device.hw_info["sw_ver"],
-            hw_version=self.device.hw_info["hw_ver"],
         )
 
     @property

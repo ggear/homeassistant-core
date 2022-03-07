@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from typing import Final
 
-from homeassistant.const import Platform
-
 DOMAIN = "tplink"
 
 ATTR_CURRENT_A: Final = "current_a"
@@ -19,4 +17,4 @@ CONF_STRIP: Final = "strip"
 CONF_SWITCH: Final = "switch"
 CONF_SENSOR: Final = "sensor"
 
-PLATFORMS: Final = [Platform.LIGHT, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: Final = [CONF_LIGHT, CONF_SENSOR, CONF_SWITCH]

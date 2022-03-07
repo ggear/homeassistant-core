@@ -7,14 +7,18 @@ from typing import cast
 from kasa import SmartDevice
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
+    STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
     SensorEntity,
     SensorEntityDescription,
-    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_VOLTAGE,
+    DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_ENERGY,
+    DEVICE_CLASS_POWER,
+    DEVICE_CLASS_VOLTAGE,
     ELECTRIC_CURRENT_AMPERE,
     ELECTRIC_POTENTIAL_VOLT,
     ENERGY_KILO_WATT_HOUR,
@@ -47,8 +51,8 @@ ENERGY_SENSORS: tuple[TPLinkSensorEntityDescription, ...] = (
     TPLinkSensorEntityDescription(
         key=ATTR_CURRENT_POWER_W,
         native_unit_of_measurement=POWER_WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
+        device_class=DEVICE_CLASS_POWER,
+        state_class=STATE_CLASS_MEASUREMENT,
         name="Current Consumption",
         emeter_attr="power",
         precision=1,
@@ -56,8 +60,8 @@ ENERGY_SENSORS: tuple[TPLinkSensorEntityDescription, ...] = (
     TPLinkSensorEntityDescription(
         key=ATTR_TOTAL_ENERGY_KWH,
         native_unit_of_measurement=ENERGY_KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        device_class=DEVICE_CLASS_ENERGY,
+        state_class=STATE_CLASS_TOTAL_INCREASING,
         name="Total Consumption",
         emeter_attr="total",
         precision=3,
@@ -65,16 +69,16 @@ ENERGY_SENSORS: tuple[TPLinkSensorEntityDescription, ...] = (
     TPLinkSensorEntityDescription(
         key=ATTR_TODAY_ENERGY_KWH,
         native_unit_of_measurement=ENERGY_KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        device_class=DEVICE_CLASS_ENERGY,
+        state_class=STATE_CLASS_TOTAL_INCREASING,
         name="Today's Consumption",
         precision=3,
     ),
     TPLinkSensorEntityDescription(
         key=ATTR_VOLTAGE,
         native_unit_of_measurement=ELECTRIC_POTENTIAL_VOLT,
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
+        device_class=DEVICE_CLASS_VOLTAGE,
+        state_class=STATE_CLASS_MEASUREMENT,
         name="Voltage",
         emeter_attr="voltage",
         precision=1,
@@ -82,8 +86,8 @@ ENERGY_SENSORS: tuple[TPLinkSensorEntityDescription, ...] = (
     TPLinkSensorEntityDescription(
         key=ATTR_CURRENT_A,
         native_unit_of_measurement=ELECTRIC_CURRENT_AMPERE,
-        device_class=SensorDeviceClass.CURRENT,
-        state_class=SensorStateClass.MEASUREMENT,
+        device_class=DEVICE_CLASS_CURRENT,
+        state_class=STATE_CLASS_MEASUREMENT,
         name="Current",
         emeter_attr="current",
         precision=2,
