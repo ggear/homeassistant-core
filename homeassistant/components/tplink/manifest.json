@@ -119,5 +119,6 @@
       "macaddress": "B09575*"
     }     
   ],
-  "loggers": ["kasa"]
+  "loggers": ["kasa"],
+  "version": "ggear-tplink"
 }
