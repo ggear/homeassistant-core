@@ -120,5 +120,5 @@
     }     
   ],
   "loggers": ["kasa"],
-  "version": "ggear-tplink"
+  "version": "100.100.100-ggear-tplink"
 }
