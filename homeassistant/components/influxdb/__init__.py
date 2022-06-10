@@ -299,12 +299,14 @@ def _generate_event_to_json(conf: dict) -> Callable[[dict], str]:
                 except (ValueError, TypeError):
                     new_key = f"{key}_str"
                     new_value = str(value)
-                    json[INFLUX_CONF_FIELDS][new_key] = new_value
 
                     if RE_DIGIT_TAIL.match(new_value):
                         json[INFLUX_CONF_FIELDS][key] = float(
                             RE_DECIMAL.sub("", new_value)
                         )
+                    else:
+                        json[INFLUX_CONF_FIELDS][new_key] = new_value
+
 
                 # Infinity and NaN are not valid floats in InfluxDB
                 with suppress(KeyError, TypeError):
