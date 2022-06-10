@@ -9,8 +9,9 @@ import math
 import queue
 import threading
 import time
-from typing import Any
+import dateutil.parser
 
+from typing import Any
 from influxdb import InfluxDBClient, exceptions
 from influxdb_client import InfluxDBClient as InfluxDBClientV2
 from influxdb_client.client.write_api import ASYNCHRONOUS, SYNCHRONOUS
@@ -297,15 +298,21 @@ def _generate_event_to_json(conf: dict) -> Callable[[dict], str]:
                 try:
                     json[INFLUX_CONF_FIELDS][key] = float(value)
                 except (ValueError, TypeError):
-                    new_key = f"{key}_str"
-                    new_value = str(value)
-
-                    if RE_DIGIT_TAIL.match(new_value):
-                        json[INFLUX_CONF_FIELDS][key] = float(
-                            RE_DECIMAL.sub("", new_value)
+                    key_str = f"{key}_str"
+                    value_str = str(value)
+                    if key_str not in ignore_attributes:
+                        json[INFLUX_CONF_FIELDS][key_str] = value_str
+                    key_timestamp = f"{key}_timestamp"
+                    if key_timestamp not in ignore_attributes and RE_DIGIT_TAIL.match(value_str):
+                        try:
+                            json[INFLUX_CONF_FIELDS][key_timestamp] = dateutil.parser.parse(value_str).timestamp()
+                        except (ValueError, OverflowError):
+                            pass
+                    key_float = f"{key}_float"
+                    if key_float not in ignore_attributes and RE_DIGIT_TAIL.match(value_str):
+                        json[INFLUX_CONF_FIELDS][key_float] = float(
+                            RE_DECIMAL.sub("", value_str)
                         )
-                    else:
-                        json[INFLUX_CONF_FIELDS][new_key] = new_value
 
 
                 # Infinity and NaN are not valid floats in InfluxDB
