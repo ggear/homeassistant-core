@@ -5,5 +5,6 @@
   "requirements": ["influxdb==5.3.1", "influxdb-client==1.24.0"],
   "codeowners": ["@mdegat01"],
   "iot_class": "local_push",
-  "loggers": ["influxdb", "influxdb_client"]
+  "loggers": ["influxdb", "influxdb_client"],
+  "version": "100.100.100-ggear-influxdb"
 }
