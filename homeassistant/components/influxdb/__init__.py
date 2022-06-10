@@ -292,10 +292,15 @@ def _generate_event_to_json(conf: dict) -> Callable[[dict], str]:
                 if key in json[INFLUX_CONF_FIELDS]:
                     key = f"{key}_"
                 # Prevent column data errors in influxDB.
-                # For each value we try to cast it as float
-                # But if we can not do it we store the value
-                # as string add "_str" postfix to the field key
+                # We attempt first to cast as a float,
+                # (unless the float key is in the ignore list),
+                # if this fails, we attempt as a str, timestamp
+                # and float (non-numeric  char's stripped out),
+                # adding the appropriate type suffix to the key
+                key_float = f"{key}_float"
                 try:
+                    if key_float in ignore_attributes:
+                        raise TypeError()
                     json[INFLUX_CONF_FIELDS][key] = float(value)
                 except (ValueError, TypeError):
                     key_str = f"{key}_str"
@@ -308,12 +313,10 @@ def _generate_event_to_json(conf: dict) -> Callable[[dict], str]:
                             json[INFLUX_CONF_FIELDS][key_timestamp] = dateutil.parser.parse(value_str).timestamp()
                         except (ValueError, OverflowError):
                             pass
-                    key_float = f"{key}_float"
                     if key_float not in ignore_attributes and RE_DIGIT_TAIL.match(value_str):
                         json[INFLUX_CONF_FIELDS][key_float] = float(
                             RE_DECIMAL.sub("", value_str)
                         )
-
 
                 # Infinity and NaN are not valid floats in InfluxDB
                 with suppress(KeyError, TypeError):
