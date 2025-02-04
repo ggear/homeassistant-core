@@ -1,4 +1,5 @@
 """Support for Xiaomi aqara binary sensors."""
+
 import logging
 
 from homeassistant.components.binary_sensor import (
@@ -11,8 +12,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from . import XiaomiDevice
 from .const import DOMAIN, GATEWAYS_KEY
+from .entity import XiaomiDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Perform the setup for Xiaomi devices."""
-    entities = []
+    entities: list[XiaomiBinarySensor] = []
     gateway = hass.data[DOMAIN][GATEWAYS_KEY][config_entry.entry_id]
     for entity in gateway.devices["binary_sensor"]:
         model = entity["model"]
@@ -140,14 +141,8 @@ class XiaomiBinarySensor(XiaomiDevice, BinarySensorEntity):
         """Initialize the XiaomiSmokeSensor."""
         self._data_key = data_key
         self._device_class = device_class
-        self._should_poll = False
         self._density = 0
         super().__init__(device, name, xiaomi_hub, config_entry)
-
-    @property
-    def should_poll(self):
-        """Return True if entity has to be polled for state."""
-        return self._should_poll
 
     @property
     def is_on(self):
@@ -159,7 +154,7 @@ class XiaomiBinarySensor(XiaomiDevice, BinarySensorEntity):
         """Return the class of binary sensor."""
         return self._device_class
 
-    def update(self):
+    def update(self) -> None:
         """Update the sensor state."""
         _LOGGER.debug("Updating xiaomi sensor (%s) by polling", self._sid)
         self._get_from_hub(self._sid)
@@ -206,6 +201,8 @@ class XiaomiNatgasSensor(XiaomiBinarySensor):
                 self._state = False
                 return True
             return False
+
+        return False
 
 
 class XiaomiMotionSensor(XiaomiBinarySensor):
@@ -273,7 +270,7 @@ class XiaomiMotionSensor(XiaomiBinarySensor):
                 "bug (https://github.com/home-assistant/core/pull/"
                 "11631#issuecomment-357507744)"
             )
-            return
+            return None
 
         if NO_MOTION in data:
             self._no_motion_since = data[NO_MOTION]
@@ -293,7 +290,7 @@ class XiaomiMotionSensor(XiaomiBinarySensor):
                 )
 
             if self.entity_id is not None:
-                self._hass.bus.fire(
+                self._hass.bus.async_fire(
                     "xiaomi_aqara.motion", {"entity_id": self.entity_id}
                 )
 
@@ -302,6 +299,8 @@ class XiaomiMotionSensor(XiaomiBinarySensor):
                 return False
             self._state = True
             return True
+
+        return False
 
 
 class XiaomiDoorSensor(XiaomiBinarySensor, RestoreEntity):
@@ -340,7 +339,7 @@ class XiaomiDoorSensor(XiaomiBinarySensor, RestoreEntity):
 
     def parse_data(self, data, raw_data):
         """Parse data sent by gateway."""
-        self._should_poll = False
+        self._attr_should_poll = False
         if NO_CLOSE in data:  # handle push from the hub
             self._open_since = data[NO_CLOSE]
             return True
@@ -350,7 +349,7 @@ class XiaomiDoorSensor(XiaomiBinarySensor, RestoreEntity):
             return False
 
         if value == "open":
-            self._should_poll = True
+            self._attr_should_poll = True
             if self._state:
                 return False
             self._state = True
@@ -361,6 +360,8 @@ class XiaomiDoorSensor(XiaomiBinarySensor, RestoreEntity):
                 self._state = False
                 return True
             return False
+
+        return False
 
 
 class XiaomiWaterLeakSensor(XiaomiBinarySensor):
@@ -388,14 +389,14 @@ class XiaomiWaterLeakSensor(XiaomiBinarySensor):
 
     def parse_data(self, data, raw_data):
         """Parse data sent by gateway."""
-        self._should_poll = False
+        self._attr_should_poll = False
 
         value = data.get(self._data_key)
         if value is None:
             return False
 
         if value == "leak":
-            self._should_poll = True
+            self._attr_should_poll = True
             if self._state:
                 return False
             self._state = True
@@ -405,6 +406,8 @@ class XiaomiWaterLeakSensor(XiaomiBinarySensor):
                 self._state = False
                 return True
             return False
+
+        return False
 
 
 class XiaomiSmokeSensor(XiaomiBinarySensor):
@@ -448,6 +451,8 @@ class XiaomiSmokeSensor(XiaomiBinarySensor):
                 return True
             return False
 
+        return False
+
 
 class XiaomiVibration(XiaomiBinarySensor):
     """Representation of a Xiaomi Vibration Sensor."""
@@ -479,7 +484,7 @@ class XiaomiVibration(XiaomiBinarySensor):
             _LOGGER.warning("Unsupported movement_type detected: %s", value)
             return False
 
-        self.hass.bus.fire(
+        self.hass.bus.async_fire(
             "xiaomi_aqara.movement",
             {"entity_id": self.entity_id, "movement_type": value},
         )
@@ -539,7 +544,7 @@ class XiaomiButton(XiaomiBinarySensor):
             _LOGGER.warning("Unsupported click_type detected: %s", value)
             return False
 
-        self._hass.bus.fire(
+        self._hass.bus.async_fire(
             "xiaomi_aqara.click",
             {"entity_id": self.entity_id, "click_type": click_type},
         )
@@ -576,7 +581,7 @@ class XiaomiCube(XiaomiBinarySensor):
     def parse_data(self, data, raw_data):
         """Parse data sent by gateway."""
         if self._data_key in data:
-            self._hass.bus.fire(
+            self._hass.bus.async_fire(
                 "xiaomi_aqara.cube_action",
                 {"entity_id": self.entity_id, "action_type": data[self._data_key]},
             )
@@ -588,7 +593,7 @@ class XiaomiCube(XiaomiBinarySensor):
                 if isinstance(data["rotate"], int)
                 else data["rotate"].replace(",", ".")
             )
-            self._hass.bus.fire(
+            self._hass.bus.async_fire(
                 "xiaomi_aqara.cube_action",
                 {
                     "entity_id": self.entity_id,
@@ -604,7 +609,7 @@ class XiaomiCube(XiaomiBinarySensor):
                 if isinstance(data["rotate_degree"], int)
                 else data["rotate_degree"].replace(",", ".")
             )
-            self._hass.bus.fire(
+            self._hass.bus.async_fire(
                 "xiaomi_aqara.cube_action",
                 {
                     "entity_id": self.entity_id,

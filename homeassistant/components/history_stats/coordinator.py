@@ -1,11 +1,19 @@
 """History stats data coordinator."""
+
 from __future__ import annotations
 
 from datetime import timedelta
 import logging
 from typing import Any
 
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    callback,
+)
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.start import async_at_start
@@ -19,15 +27,14 @@ _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(minutes=1)
 
 
-class HistoryStatsUpdateCoordinator(DataUpdateCoordinator):
-    """DataUpdateCoordinator to gather data for a specific TPLink device."""
-
-    data: HistoryStatsState
+class HistoryStatsUpdateCoordinator(DataUpdateCoordinator[HistoryStatsState]):
+    """DataUpdateCoordinator for history stats."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         history_stats: HistoryStats,
+        config_entry: ConfigEntry | None,
         name: str,
     ) -> None:
         """Initialize DataUpdateCoordinator."""
@@ -38,6 +45,7 @@ class HistoryStatsUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=name,
             update_interval=UPDATE_INTERVAL,
         )
@@ -84,7 +92,9 @@ class HistoryStatsUpdateCoordinator(DataUpdateCoordinator):
             self.hass, [self._history_stats.entity_id], self._async_update_from_event
         )
 
-    async def _async_update_from_event(self, event: Event) -> None:
+    async def _async_update_from_event(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
         """Process an update from an event."""
         self.async_set_updated_data(await self._history_stats.async_update(event))
 

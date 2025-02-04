@@ -1,14 +1,31 @@
 """Helpers to generate ulids."""
 
-from random import getrandbits
-import time
+from __future__ import annotations
+
+from ulid_transform import (
+    bytes_to_ulid,
+    bytes_to_ulid_or_none,
+    ulid_at_time,
+    ulid_hex,
+    ulid_now,
+    ulid_to_bytes,
+    ulid_to_bytes_or_none,
+)
+
+__all__ = [
+    "ulid",
+    "ulid_hex",
+    "ulid_at_time",
+    "ulid_to_bytes",
+    "bytes_to_ulid",
+    "ulid_now",
+    "ulid_to_bytes_or_none",
+    "bytes_to_ulid_or_none",
+]
 
 
-# In the future once we require python 3.10 and above, we can
-# create a new function that uses base64.b32encodehex to shorten
-# these to 26 characters.
-def ulid_hex() -> str:
-    """Generate a ULID in hex that will work for a UUID.
+def ulid(timestamp: float | None = None) -> str:
+    """Generate a ULID.
 
     This ulid should not be used for cryptographically secure
     operations.
@@ -18,8 +35,10 @@ def ulid_hex() -> str:
      Timestamp          Randomness
        48bits             80bits
 
-    This string can be converted with https://github.com/ahawker/ulid
+    This string can be loaded directly with https://github.com/ahawker/ulid
 
-    ulid.from_uuid(uuid.UUID(value))
+    import homeassistant.util.ulid as ulid_util
+    import ulid
+    ulid.parse(ulid_util.ulid())
     """
-    return f"{int(time.time()*1000):012x}{getrandbits(80):020x}"
+    return ulid_now() if timestamp is None else ulid_at_time(timestamp)

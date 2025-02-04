@@ -1,14 +1,17 @@
 """Support for Tellstick lights using Tellstick Net."""
-import logging
 
-from homeassistant.components import light, tellduslive
+import logging
+from typing import Any
+
+from homeassistant.components import light
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .entry import TelldusLiveEntity
+from .const import DOMAIN, TELLDUS_DISCOVERY_NEW
+from .entity import TelldusLiveEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,12 +25,12 @@ async def async_setup_entry(
 
     async def async_discover_light(device_id):
         """Discover and add a discovered sensor."""
-        client = hass.data[tellduslive.DOMAIN]
+        client = hass.data[DOMAIN]
         async_add_entities([TelldusLiveLight(client, device_id)])
 
     async_dispatcher_connect(
         hass,
-        tellduslive.TELLDUS_DISCOVERY_NEW.format(light.DOMAIN, tellduslive.DOMAIN),
+        TELLDUS_DISCOVERY_NEW.format(light.DOMAIN, DOMAIN),
         async_discover_light,
     )
 
@@ -35,6 +38,7 @@ async def async_setup_entry(
 class TelldusLiveLight(TelldusLiveEntity, LightEntity):
     """Representation of a Tellstick Net light."""
 
+    _attr_name = None
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
@@ -46,7 +50,7 @@ class TelldusLiveLight(TelldusLiveEntity, LightEntity):
     def changed(self):
         """Define a property of the device that might have changed."""
         self._last_brightness = self.brightness
-        self._update_callback()
+        self.schedule_update_ha_state()
 
     @property
     def brightness(self):
@@ -58,19 +62,19 @@ class TelldusLiveLight(TelldusLiveEntity, LightEntity):
         """Return true if light is on."""
         return self.device.is_on
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
         brightness = kwargs.get(ATTR_BRIGHTNESS, self._last_brightness)
         if brightness == 0:
             fallback_brightness = 100
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Setting brightness to %d%%, because it was 0", fallback_brightness
             )
             brightness = int(fallback_brightness * 255 / 100)
         self.device.dim(level=brightness)
         self.changed()
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         self.device.turn_off()
         self.changed()

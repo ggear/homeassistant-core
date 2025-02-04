@@ -1,5 +1,7 @@
 """WiZ Platform integration."""
-import asyncio
+
+from __future__ import annotations
+
 from datetime import timedelta
 import logging
 from typing import Any
@@ -11,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
@@ -28,6 +31,8 @@ from .const import (
 from .discovery import async_discover_devices, async_trigger_discovery
 from .models import WizData
 
+type WizConfigEntry = ConfigEntry[WizData]
+
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [
@@ -40,6 +45,8 @@ PLATFORMS = [
 
 REQUEST_REFRESH_DELAY = 0.35
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 
 async def async_setup(hass: HomeAssistant, hass_config: ConfigType) -> bool:
     """Set up the wiz integration."""
@@ -49,8 +56,10 @@ async def async_setup(hass: HomeAssistant, hass_config: ConfigType) -> bool:
             hass, await async_discover_devices(hass, DISCOVER_SCAN_TIMEOUT)
         )
 
-    asyncio.create_task(_async_discovery())
-    async_track_time_interval(hass, _async_discovery, DISCOVERY_INTERVAL)
+    hass.async_create_background_task(_async_discovery(), "wiz-discovery")
+    async_track_time_interval(
+        hass, _async_discovery, DISCOVERY_INTERVAL, cancel_on_shutdown=True
+    )
     return True
 
 
@@ -80,16 +89,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Found bulb {bulb.mac} at {ip_address}, expected {entry.unique_id}"
         )
 
-    async def _async_update() -> None:
+    async def _async_update() -> float | None:
         """Update the WiZ device."""
         try:
             await bulb.updateState()
+            if bulb.power_monitoring is not False:
+                power: float | None = await bulb.get_power()
+                return power
         except WIZ_EXCEPTIONS as ex:
             raise UpdateFailed(f"Failed to update device at {ip_address}: {ex}") from ex
+        return None
 
     coordinator = DataUpdateCoordinator(
         hass=hass,
         logger=_LOGGER,
+        config_entry=entry,
         name=entry.title,
         update_interval=timedelta(seconds=15),
         update_method=_async_update,
@@ -102,9 +116,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await coordinator.async_config_entry_first_refresh()
-    except ConfigEntryNotReady as err:
+    except ConfigEntryNotReady:
         await bulb.async_close()
-        raise err
+        raise
 
     async def _async_shutdown_on_stop(event: Event) -> None:
         await bulb.async_close()
@@ -117,17 +131,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _async_push_update(state: PilotParser) -> None:
         """Receive a push update."""
         _LOGGER.debug("%s: Got push update: %s", bulb.mac, state.pilotResult)
-        coordinator.async_set_updated_data(None)
+        coordinator.async_set_updated_data(coordinator.data)
         if state.get_source() == PIR_SOURCE:
             async_dispatcher_send(hass, SIGNAL_WIZ_PIR.format(bulb.mac))
 
     await bulb.start_push(_async_push_update)
     bulb.set_discovery_callback(lambda bulb: async_trigger_discovery(hass, [bulb]))
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = WizData(
-        coordinator=coordinator, bulb=bulb, scenes=scenes
-    )
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    entry.runtime_data = WizData(coordinator=coordinator, bulb=bulb, scenes=scenes)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
@@ -136,6 +148,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data: WizData = hass.data[DOMAIN].pop(entry.entry_id)
-        await data.bulb.async_close()
+        await entry.runtime_data.bulb.async_close()
     return unload_ok

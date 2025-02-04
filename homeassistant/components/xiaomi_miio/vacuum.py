@@ -1,32 +1,29 @@
 """Support for the Xiaomi vacuum cleaner robot."""
+
 from __future__ import annotations
 
 from functools import partial
 import logging
+from typing import Any
 
 from miio import DeviceException
 import voluptuous as vol
 
 from homeassistant.components.vacuum import (
-    STATE_CLEANING,
-    STATE_DOCKED,
-    STATE_ERROR,
-    STATE_IDLE,
-    STATE_PAUSED,
-    STATE_RETURNING,
     StateVacuumEntity,
+    VacuumActivity,
     VacuumEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_DEVICE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import as_utc
 
 from . import VacuumCoordinatorData
-from ...helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
-    CONF_DEVICE,
     CONF_FLOW_TYPE,
     DOMAIN,
     KEY_COORDINATOR,
@@ -39,7 +36,7 @@ from .const import (
     SERVICE_START_REMOTE_CONTROL,
     SERVICE_STOP_REMOTE_CONTROL,
 )
-from .device import XiaomiCoordinatedMiioEntity
+from .entity import XiaomiCoordinatedMiioEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,27 +50,29 @@ ATTR_ZONE_REPEATER = "repeats"
 ATTR_TIMERS = "timers"
 
 STATE_CODE_TO_STATE = {
-    1: STATE_IDLE,  # "Starting"
-    2: STATE_IDLE,  # "Charger disconnected"
-    3: STATE_IDLE,  # "Idle"
-    4: STATE_CLEANING,  # "Remote control active"
-    5: STATE_CLEANING,  # "Cleaning"
-    6: STATE_RETURNING,  # "Returning home"
-    7: STATE_CLEANING,  # "Manual mode"
-    8: STATE_DOCKED,  # "Charging"
-    9: STATE_ERROR,  # "Charging problem"
-    10: STATE_PAUSED,  # "Paused"
-    11: STATE_CLEANING,  # "Spot cleaning"
-    12: STATE_ERROR,  # "Error"
-    13: STATE_IDLE,  # "Shutting down"
-    14: STATE_DOCKED,  # "Updating"
-    15: STATE_RETURNING,  # "Docking"
-    16: STATE_CLEANING,  # "Going to target"
-    17: STATE_CLEANING,  # "Zoned cleaning"
-    18: STATE_CLEANING,  # "Segment cleaning"
-    22: STATE_DOCKED,  # "Emptying the bin" on s7+
-    100: STATE_DOCKED,  # "Charging complete"
-    101: STATE_ERROR,  # "Device offline"
+    1: VacuumActivity.IDLE,  # "Starting"
+    2: VacuumActivity.IDLE,  # "Charger disconnected"
+    3: VacuumActivity.IDLE,  # "Idle"
+    4: VacuumActivity.CLEANING,  # "Remote control active"
+    5: VacuumActivity.CLEANING,  # "Cleaning"
+    6: VacuumActivity.RETURNING,  # "Returning home"
+    7: VacuumActivity.CLEANING,  # "Manual mode"
+    8: VacuumActivity.DOCKED,  # "Charging"
+    9: VacuumActivity.ERROR,  # "Charging problem"
+    10: VacuumActivity.PAUSED,  # "Paused"
+    11: VacuumActivity.CLEANING,  # "Spot cleaning"
+    12: VacuumActivity.ERROR,  # "Error"
+    13: VacuumActivity.IDLE,  # "Shutting down"
+    14: VacuumActivity.DOCKED,  # "Updating"
+    15: VacuumActivity.RETURNING,  # "Docking"
+    16: VacuumActivity.CLEANING,  # "Going to target"
+    17: VacuumActivity.CLEANING,  # "Zoned cleaning"
+    18: VacuumActivity.CLEANING,  # "Segment cleaning"
+    22: VacuumActivity.DOCKED,  # "Emptying the bin" on s7+
+    23: VacuumActivity.DOCKED,  # "Washing the mop" on s7maxV
+    26: VacuumActivity.RETURNING,  # "Going to wash the mop" on s7maxV
+    100: VacuumActivity.DOCKED,  # "Charging complete"
+    101: VacuumActivity.ERROR,  # "Device offline"
 }
 
 
@@ -86,11 +85,9 @@ async def async_setup_entry(
     entities = []
 
     if config_entry.data[CONF_FLOW_TYPE] == CONF_DEVICE:
-        name = config_entry.title
         unique_id = config_entry.unique_id
 
         mirobo = MiroboVacuum(
-            name,
             hass.data[DOMAIN][config_entry.entry_id][KEY_DEVICE],
             config_entry,
             unique_id,
@@ -102,13 +99,13 @@ async def async_setup_entry(
 
         platform.async_register_entity_service(
             SERVICE_START_REMOTE_CONTROL,
-            {},
+            None,
             MiroboVacuum.async_remote_control_start.__name__,
         )
 
         platform.async_register_entity_service(
             SERVICE_STOP_REMOTE_CONTROL,
-            {},
+            None,
             MiroboVacuum.async_remote_control_stop.__name__,
         )
 
@@ -186,6 +183,7 @@ class MiroboVacuum(
 ):
     """Representation of a Xiaomi Vacuum cleaner robot."""
 
+    _attr_name = None
     _attr_supported_features = (
         VacuumEntityFeature.STATE
         | VacuumEntityFeature.PAUSE
@@ -201,15 +199,14 @@ class MiroboVacuum(
 
     def __init__(
         self,
-        name,
         device,
         entry,
         unique_id,
         coordinator: DataUpdateCoordinator[VacuumCoordinatorData],
-    ):
+    ) -> None:
         """Initialize the Xiaomi vacuum cleaner robot handler."""
-        super().__init__(name, device, entry, unique_id, coordinator)
-        self._state: str | None = None
+        super().__init__(device, entry, unique_id, coordinator)
+        self._state: VacuumActivity | None = None
 
     async def async_added_to_hass(self) -> None:
         """Run when entity is about to be added to hass."""
@@ -217,12 +214,12 @@ class MiroboVacuum(
         self._handle_coordinator_update()
 
     @property
-    def state(self):
+    def activity(self) -> VacuumActivity | None:
         """Return the status of the vacuum cleaner."""
         # The vacuum reverts back to an idle state after erroring out.
         # We want to keep returning an error until it has been cleared.
         if self.coordinator.data.status.got_error:
-            return STATE_ERROR
+            return VacuumActivity.ERROR
 
         return self._state
 
@@ -250,7 +247,7 @@ class MiroboVacuum(
         return []
 
     @property
-    def timers(self):
+    def timers(self) -> list[dict[str, Any]]:
         """Get the list of added timers of the vacuum cleaner."""
         return [
             {
@@ -262,9 +259,9 @@ class MiroboVacuum(
         ]
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return the specific state attributes of this vacuum cleaner."""
-        attrs = {}
+        attrs: dict[str, Any] = {}
         attrs[ATTR_STATUS] = str(self.coordinator.data.status.state)
 
         if self.coordinator.data.status.got_error:
@@ -279,32 +276,32 @@ class MiroboVacuum(
         try:
             await self.hass.async_add_executor_job(partial(func, *args, **kwargs))
             await self.coordinator.async_refresh()
-            return True
         except DeviceException as exc:
             _LOGGER.error(mask_error, exc)
             return False
+        return True
 
-    async def async_start(self):
+    async def async_start(self) -> None:
         """Start or resume the cleaning task."""
         await self._try_command(
             "Unable to start the vacuum: %s", self._device.resume_or_start
         )
 
-    async def async_pause(self):
+    async def async_pause(self) -> None:
         """Pause the cleaning task."""
         await self._try_command("Unable to set start/pause: %s", self._device.pause)
 
-    async def async_stop(self, **kwargs):
+    async def async_stop(self, **kwargs: Any) -> None:
         """Stop the vacuum cleaner."""
         await self._try_command("Unable to stop: %s", self._device.stop)
 
-    async def async_set_fan_speed(self, fan_speed, **kwargs):
+    async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
         """Set fan speed."""
         if fan_speed in self.coordinator.data.fan_speeds:
-            fan_speed = self.coordinator.data.fan_speeds[fan_speed]
+            fan_speed_int = self.coordinator.data.fan_speeds[fan_speed]
         else:
             try:
-                fan_speed = int(fan_speed)
+                fan_speed_int = int(fan_speed)
             except ValueError as exc:
                 _LOGGER.error(
                     "Fan speed step not recognized (%s). Valid speeds are: %s",
@@ -313,24 +310,29 @@ class MiroboVacuum(
                 )
                 return
         await self._try_command(
-            "Unable to set fan speed: %s", self._device.set_fan_speed, fan_speed
+            "Unable to set fan speed: %s", self._device.set_fan_speed, fan_speed_int
         )
 
-    async def async_return_to_base(self, **kwargs):
+    async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
         await self._try_command("Unable to return home: %s", self._device.home)
 
-    async def async_clean_spot(self, **kwargs):
+    async def async_clean_spot(self, **kwargs: Any) -> None:
         """Perform a spot clean-up."""
         await self._try_command(
             "Unable to start the vacuum for a spot clean-up: %s", self._device.spot
         )
 
-    async def async_locate(self, **kwargs):
+    async def async_locate(self, **kwargs: Any) -> None:
         """Locate the vacuum cleaner."""
         await self._try_command("Unable to locate the botvac: %s", self._device.find)
 
-    async def async_send_command(self, command, params=None, **kwargs):
+    async def async_send_command(
+        self,
+        command: str,
+        params: dict[str, Any] | list[Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Send raw command."""
         await self._try_command(
             "Unable to send command to the vacuum: %s",
@@ -339,13 +341,13 @@ class MiroboVacuum(
             params,
         )
 
-    async def async_remote_control_start(self):
+    async def async_remote_control_start(self) -> None:
         """Start remote control mode."""
         await self._try_command(
             "Unable to start remote control the vacuum: %s", self._device.manual_start
         )
 
-    async def async_remote_control_stop(self):
+    async def async_remote_control_stop(self) -> None:
         """Stop remote control mode."""
         await self._try_command(
             "Unable to stop remote control the vacuum: %s", self._device.manual_stop
@@ -353,7 +355,7 @@ class MiroboVacuum(
 
     async def async_remote_control_move(
         self, rotation: int = 0, velocity: float = 0.3, duration: int = 1500
-    ):
+    ) -> None:
         """Move vacuum with remote control mode."""
         await self._try_command(
             "Unable to move with remote control the vacuum: %s",
@@ -365,7 +367,7 @@ class MiroboVacuum(
 
     async def async_remote_control_move_step(
         self, rotation: int = 0, velocity: float = 0.2, duration: int = 1500
-    ):
+    ) -> None:
         """Move vacuum one step with remote control mode."""
         await self._try_command(
             "Unable to remote control the vacuum: %s",
@@ -375,7 +377,7 @@ class MiroboVacuum(
             duration=duration,
         )
 
-    async def async_goto(self, x_coord: int, y_coord: int):
+    async def async_goto(self, x_coord: int, y_coord: int) -> None:
         """Goto the specified coordinates."""
         await self._try_command(
             "Unable to send the vacuum cleaner to the specified coordinates: %s",
@@ -384,7 +386,7 @@ class MiroboVacuum(
             y_coord=y_coord,
         )
 
-    async def async_clean_segment(self, segments):
+    async def async_clean_segment(self, segments) -> None:
         """Clean the specified segments(s)."""
         if isinstance(segments, int):
             segments = [segments]
@@ -395,7 +397,7 @@ class MiroboVacuum(
             segments=segments,
         )
 
-    async def async_clean_zone(self, zone, repeats=1):
+    async def async_clean_zone(self, zone: list[Any], repeats: int = 1) -> None:
         """Clean selected area for the number of repeats indicated."""
         for _zone in zone:
             _zone.append(repeats)

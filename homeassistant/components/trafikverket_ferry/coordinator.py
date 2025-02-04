@@ -1,21 +1,26 @@
 """DataUpdateCoordinator for the Trafikverket Ferry integration."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pytrafikverket import TrafikverketFerry
-from pytrafikverket.trafikverket_ferry import FerryStop
+from pytrafikverket.exceptions import InvalidAuthentication, NoFerryFound
+from pytrafikverket.models import FerryStopModel
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, CONF_WEEKDAY, WEEKDAYS
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util.dt import UTC, as_utc, parse_time
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_FROM, CONF_TIME, CONF_TO, DOMAIN
+
+if TYPE_CHECKING:
+    from . import TVFerryConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 TIME_BETWEEN_UPDATES = timedelta(minutes=5)
@@ -45,7 +50,9 @@ def next_departuredate(departure: list[str]) -> date:
 class TVDataUpdateCoordinator(DataUpdateCoordinator):
     """A Trafikverket Data Update Coordinator."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    config_entry: TVFerryConfigEntry
+
+    def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the Trafikverket coordinator."""
         super().__init__(
             hass,
@@ -54,40 +61,50 @@ class TVDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=TIME_BETWEEN_UPDATES,
         )
         self._ferry_api = TrafikverketFerry(
-            async_get_clientsession(hass), entry.data[CONF_API_KEY]
+            async_get_clientsession(hass), self.config_entry.data[CONF_API_KEY]
         )
-        self._from: str = entry.data[CONF_FROM]
-        self._to: str = entry.data[CONF_TO]
-        self._time: time | None = parse_time(entry.data[CONF_TIME])
-        self._weekdays: list[str] = entry.data[CONF_WEEKDAY]
+        self._from: str = self.config_entry.data[CONF_FROM]
+        self._to: str = self.config_entry.data[CONF_TO]
+        self._time: time | None = dt_util.parse_time(self.config_entry.data[CONF_TIME])
+        self._weekdays: list[str] = self.config_entry.data[CONF_WEEKDAY]
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Trafikverket."""
 
         departure_day = next_departuredate(self._weekdays)
-        currenttime = datetime.now()
+        current_time = dt_util.now()
         when = (
-            datetime.combine(departure_day, self._time)
+            datetime.combine(
+                departure_day,
+                self._time,
+                dt_util.get_default_time_zone(),
+            )
             if self._time
-            else datetime.now()
+            else dt_util.now()
         )
-        if currenttime > when:
-            when = currenttime
+        when = max(when, current_time)
 
         try:
-            routedata: FerryStop = await self._ferry_api.async_get_next_ferry_stop(
-                self._from, self._to, when
+            routedata: list[
+                FerryStopModel
+            ] = await self._ferry_api.async_get_next_ferry_stops(
+                self._from, self._to, when, 3
             )
-        except ValueError as error:
+        except NoFerryFound as error:
             raise UpdateFailed(
                 f"Departure {when} encountered a problem: {error}"
             ) from error
+        except InvalidAuthentication as error:
+            raise ConfigEntryAuthFailed(error) from error
 
         states = {
-            "departure_time": routedata.departure_time.replace(tzinfo=UTC),
-            "departure_from": routedata.from_harbor_name,
-            "departure_to": routedata.to_harbor_name,
-            "departure_modified": as_utc(routedata.modified_time.replace(tzinfo=UTC)),
-            "departure_information": routedata.other_information,
+            "departure_time": routedata[0].departure_time,
+            "departure_from": routedata[0].from_harbor_name,
+            "departure_to": routedata[0].to_harbor_name,
+            "departure_modified": routedata[0].modified_time,
+            "departure_information": routedata[0].other_information,
+            "departure_time_next": routedata[1].departure_time,
+            "departure_time_next_next": routedata[2].departure_time,
         }
+        _LOGGER.debug("States: %s", states)
         return states

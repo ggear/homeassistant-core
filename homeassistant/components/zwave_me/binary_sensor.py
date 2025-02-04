@@ -1,10 +1,11 @@
 """Representation of a sensorBinary."""
+
 from __future__ import annotations
 
 from zwave_me_ws import ZWaveMeData
 
 from homeassistant.components.binary_sensor import (
-    DEVICE_CLASS_MOTION,
+    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
@@ -13,8 +14,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ZWaveMeController, ZWaveMeEntity
+from . import ZWaveMeController
 from .const import DOMAIN, ZWaveMePlatform
+from .entity import ZWaveMeEntity
 
 BINARY_SENSORS_MAP: dict[str, BinarySensorEntityDescription] = {
     "generic": BinarySensorEntityDescription(
@@ -22,7 +24,7 @@ BINARY_SENSORS_MAP: dict[str, BinarySensorEntityDescription] = {
     ),
     "motion": BinarySensorEntityDescription(
         key="motion",
-        device_class=DEVICE_CLASS_MOTION,
+        device_class=BinarySensorDeviceClass.MOTION,
     ),
 }
 DEVICE_NAME = ZWaveMePlatform.BINARY_SENSOR

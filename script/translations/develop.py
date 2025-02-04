@@ -1,4 +1,5 @@
 """Compile the current translation strings files for testing."""
+
 import argparse
 import json
 from pathlib import Path
@@ -8,7 +9,7 @@ import sys
 
 from . import download, upload
 from .const import INTEGRATIONS_DIR
-from .util import get_base_arg_parser
+from .util import flatten_translations, get_base_arg_parser
 
 
 def valid_integration(integration):
@@ -27,30 +28,8 @@ def get_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--integration", type=valid_integration, help="Integration to process."
     )
+    parser.add_argument("--all", action="store_true", help="Process all integrations.")
     return parser.parse_args()
-
-
-def flatten_translations(translations):
-    """Flatten all translations."""
-    stack = [iter(translations.items())]
-    key_stack = []
-    flattened_translations = {}
-    while stack:
-        for k, v in stack[-1]:
-            key_stack.append(k)
-            if isinstance(v, dict):
-                stack.append(iter(v.items()))
-                break
-            elif isinstance(v, str):
-                common_key = "::".join(key_stack)
-                flattened_translations[common_key] = v
-                key_stack.pop()
-        else:
-            stack.pop()
-            if len(key_stack) > 0:
-                key_stack.pop()
-
-    return flattened_translations
 
 
 def substitute_translation_references(integration_strings, flattened_translations):
@@ -68,7 +47,7 @@ def substitute_translation_references(integration_strings, flattened_translation
 
 def substitute_reference(value, flattened_translations):
     """Substitute localization key references in a translation string."""
-    matches = re.findall(r"\[\%key:((?:[\w]+|[:]{2})*)\%\]", value)
+    matches = re.findall(r"\[\%key:([a-z0-9_]+(?:::(?:[a-z0-9-_])+)+)\%\]", value)
     if not matches:
         return value
 
@@ -89,29 +68,14 @@ def substitute_reference(value, flattened_translations):
     return new
 
 
-def run():
-    """Run the script."""
-    args = get_arguments()
-    if args.integration:
-        integration = args.integration
-    else:
-        integration = None
-        while (
-            integration is None
-            or not Path(f"homeassistant/components/{integration}").exists()
-        ):
-            if integration is not None:
-                print(f"Integration {integration} doesn't exist!")
-                print()
-            integration = input("Integration to process: ")
-
-    translations = upload.generate_upload_data()
+def run_single(translations, flattened_translations, integration):
+    """Run the script for a single integration."""
+    print(f"Generating translations for {integration}")
 
     if integration not in translations["component"]:
         print("Integration has no strings.json")
         sys.exit(1)
 
-    flattened_translations = flatten_translations(translations)
     integration_strings = translations["component"][integration]
 
     translations["component"][integration] = substitute_translation_references(
@@ -129,4 +93,31 @@ def run():
 
     download.write_integration_translations()
 
+
+def run():
+    """Run the script."""
+    args = get_arguments()
+    translations = upload.generate_upload_data()
+    flattened_translations = flatten_translations(translations)
+
+    if args.all:
+        for integration in translations["component"]:
+            run_single(translations, flattened_translations, integration)
+        print("🌎 Generated translation files for all integrations")
+        return 0
+
+    if args.integration:
+        integration = args.integration
+    else:
+        integration = None
+        while (
+            integration is None
+            or not Path(f"homeassistant/components/{integration}").exists()
+        ):
+            if integration is not None:
+                print(f"Integration {integration} doesn't exist!")
+                print()
+            integration = input("Integration to process: ")
+
+    run_single(translations, flattened_translations, integration)
     return 0

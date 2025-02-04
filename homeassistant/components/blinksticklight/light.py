@@ -1,13 +1,17 @@
 """Support for Blinkstick lights."""
+
+# mypy: ignore-errors
 from __future__ import annotations
 
-from blinkstick import blinkstick
+from typing import Any
+
+# from blinkstick import blinkstick
 import voluptuous as vol
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_HS_COLOR,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
 )
@@ -22,7 +26,7 @@ CONF_SERIAL = "serial"
 
 DEFAULT_NAME = "Blinkstick"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_SERIAL): cv.string,
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
@@ -57,29 +61,29 @@ class BlinkStickLight(LightEntity):
         self._stick = stick
         self._attr_name = name
 
-    def update(self):
+    def update(self) -> None:
         """Read back the device state."""
         rgb_color = self._stick.get_color()
         hsv = color_util.color_RGB_to_hsv(*rgb_color)
         self._attr_hs_color = hsv[:2]
-        self._attr_brightness = hsv[2]
-        self._attr_is_on = self.brightness > 0
+        self._attr_brightness = int(hsv[2])
+        self._attr_is_on = self.brightness is not None and self.brightness > 0
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn the device on."""
         if ATTR_HS_COLOR in kwargs:
             self._attr_hs_color = kwargs[ATTR_HS_COLOR]
-        if ATTR_BRIGHTNESS in kwargs:
-            self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
-        else:
-            self._attr_brightness = 255
-        self._attr_is_on = self.brightness > 0
 
+        brightness: int = kwargs.get(ATTR_BRIGHTNESS, 255)
+        self._attr_brightness = brightness
+        self._attr_is_on = bool(brightness)
+
+        assert self.hs_color
         rgb_color = color_util.color_hsv_to_RGB(
-            self.hs_color[0], self.hs_color[1], self.brightness / 255 * 100
+            self.hs_color[0], self.hs_color[1], brightness / 255 * 100
         )
         self._stick.set_color(red=rgb_color[0], green=rgb_color[1], blue=rgb_color[2])
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
         self._stick.turn_off()

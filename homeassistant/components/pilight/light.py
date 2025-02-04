@@ -1,11 +1,14 @@
 """Support for switching devices via Pilight to on and off."""
+
 from __future__ import annotations
+
+from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
 )
@@ -15,8 +18,8 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .base_class import SWITCHES_SCHEMA, PilightBaseDevice
 from .const import CONF_DIMLEVEL_MAX, CONF_DIMLEVEL_MIN
+from .entity import SWITCHES_SCHEMA, PilightBaseDevice
 
 LIGHTS_SCHEMA = SWITCHES_SCHEMA.extend(
     {
@@ -25,7 +28,7 @@ LIGHTS_SCHEMA = SWITCHES_SCHEMA.extend(
     }
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_LIGHTS): vol.Schema({cv.string: LIGHTS_SCHEMA})}
 )
 
@@ -63,7 +66,7 @@ class PilightLight(PilightBaseDevice, LightEntity):
         """Return the brightness."""
         return self._brightness
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on by calling pilight.send service with on code."""
         # Update brightness only if provided as an argument.
         # This will allow the switch to keep its previous brightness level.
@@ -75,7 +78,8 @@ class PilightLight(PilightBaseDevice, LightEntity):
             # Calculate pilight brightness (as a range of 0 to 15)
             # By creating a percentage
             percentage = self._brightness / 255
-            # Then calculate the dimmer range (aka amount of available brightness steps).
+            # Then calculate the dimmer range (aka amount
+            # of available brightness steps).
             dimrange = self._dimlevel_max - self._dimlevel_min
             # Finally calculate the pilight brightness.
             # We add dimlevel_min back in to ensure the minimum is always reached.

@@ -1,16 +1,19 @@
 """Support for Homematic thermostats."""
+
 from __future__ import annotations
 
-from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import (
+from typing import Any
+
+from homeassistant.components.climate import (
     PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
     PRESET_NONE,
+    ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
 )
-from homeassistant.const import ATTR_TEMPERATURE, TEMP_CELSIUS
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -54,13 +57,12 @@ class HMThermostat(HMDevice, ClimateEntity):
     """Representation of a Homematic thermostat."""
 
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
     )
-
-    @property
-    def temperature_unit(self):
-        """Return the unit of measurement that is used."""
-        return TEMP_CELSIUS
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -110,11 +112,11 @@ class HMThermostat(HMDevice, ClimateEntity):
     @property
     def preset_modes(self):
         """Return a list of available preset modes."""
-        preset_modes = []
-        for mode in self._hmdevice.ACTIONNODE:
-            if mode in HM_PRESET_MAP:
-                preset_modes.append(HM_PRESET_MAP[mode])
-        return preset_modes
+        return [
+            HM_PRESET_MAP[mode]
+            for mode in self._hmdevice.ACTIONNODE
+            if mode in HM_PRESET_MAP
+        ]
 
     @property
     def current_humidity(self):
@@ -122,6 +124,7 @@ class HMThermostat(HMDevice, ClimateEntity):
         for node in HM_HUMI_MAP:
             if node in self._data:
                 return self._data[node]
+        return None
 
     @property
     def current_temperature(self):
@@ -129,16 +132,17 @@ class HMThermostat(HMDevice, ClimateEntity):
         for node in HM_TEMP_MAP:
             if node in self._data:
                 return self._data[node]
+        return None
 
     @property
     def target_temperature(self):
         """Return the target temperature."""
         return self._data.get(self._state)
 
-    def set_temperature(self, **kwargs):
+    def set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
-            return None
+            return
 
         self._hmdevice.writeNodeData(self._state, float(temperature))
 
@@ -195,5 +199,5 @@ class HMThermostat(HMDevice, ClimateEntity):
         ):
             self._data[HM_CONTROL_MODE] = None
 
-        for node in self._hmdevice.SENSORNODE.keys():
+        for node in self._hmdevice.SENSORNODE:
             self._data[node] = None

@@ -1,4 +1,5 @@
 """Support for IKEA Tradfri."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -13,7 +14,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-import homeassistant.helpers.config_validation as cv
 import homeassistant.helpers.device_registry as dr
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -34,7 +34,6 @@ from .const import (
 )
 from .coordinator import TradfriDeviceDataUpdateCoordinator
 
-CONFIG_SCHEMA = cv.removed(DOMAIN, raise_if_present=False)
 PLATFORMS = [
     Platform.COVER,
     Platform.FAN,
@@ -84,7 +83,7 @@ async def async_setup_entry(
         await factory.shutdown()
         raise ConfigEntryNotReady from exc
 
-    dev_reg = await hass.helpers.device_registry.async_get_registry()
+    dev_reg = dr.async_get(hass)
     dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
         connections=set(),
@@ -135,7 +134,7 @@ async def async_setup_entry(
         async_track_time_interval(hass, async_keep_alive, timedelta(seconds=60))
     )
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

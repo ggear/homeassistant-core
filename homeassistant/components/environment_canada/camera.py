@@ -1,4 +1,5 @@
 """Support for the Environment Canada radar imagery."""
+
 from __future__ import annotations
 
 import voluptuous as vol
@@ -10,12 +11,14 @@ from homeassistant.helpers.entity_platform import (
     AddEntitiesCallback,
     async_get_current_platform,
 )
+from homeassistant.helpers.typing import VolDictType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import device_info
 from .const import ATTR_OBSERVATION_TIME, DOMAIN
 
 SERVICE_SET_RADAR_TYPE = "set_radar_type"
-SET_RADAR_TYPE_SCHEMA = {
+SET_RADAR_TYPE_SCHEMA: VolDictType = {
     vol.Required("radar_type"): vol.In(["Auto", "Rain", "Snow"]),
 }
 
@@ -40,16 +43,19 @@ async def async_setup_entry(
 class ECCamera(CoordinatorEntity, Camera):
     """Implementation of an Environment Canada radar camera."""
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "radar"
+
     def __init__(self, coordinator):
         """Initialize the camera."""
         super().__init__(coordinator)
         Camera.__init__(self)
 
         self.radar_object = coordinator.ec_data
-        self._attr_name = f"{coordinator.config_entry.title} Radar"
         self._attr_unique_id = f"{coordinator.config_entry.unique_id}-radar"
         self._attr_attribution = self.radar_object.metadata["attribution"]
         self._attr_entity_registry_enabled_default = False
+        self._attr_device_info = device_info(coordinator.config_entry)
 
         self.content_type = "image/gif"
 

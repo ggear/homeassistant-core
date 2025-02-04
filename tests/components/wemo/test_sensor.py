@@ -2,6 +2,9 @@
 
 import pytest
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+
 from .conftest import MOCK_INSIGHT_CURRENT_WATTS, MOCK_INSIGHT_TODAY_KWH
 from .entity_test_helpers import EntityTestHelpers
 
@@ -10,21 +13,6 @@ from .entity_test_helpers import EntityTestHelpers
 def pywemo_model():
     """Pywemo LightSwitch models use the switch platform."""
     return "Insight"
-
-
-@pytest.fixture(name="pywemo_device")
-def pywemo_device_fixture(pywemo_device):
-    """Fixture for WeMoDevice instances."""
-    pywemo_device.insight_params = {
-        "currentpower": 1.0,
-        "todaymw": 200000000.0,
-        "state": 0,
-        "onfor": 0,
-        "ontoday": 0,
-        "ontotal": 0,
-        "powerthreshold": 0,
-    }
-    yield pywemo_device
 
 
 class InsightTestTemplate(EntityTestHelpers):
@@ -39,7 +27,7 @@ class InsightTestTemplate(EntityTestHelpers):
         """Select the appropriate entity for the test."""
         return cls.ENTITY_ID_SUFFIX
 
-    def test_state(self, hass, wemo_entity):
+    def test_state(self, hass: HomeAssistant, wemo_entity: er.RegistryEntry) -> None:
         """Test the sensor state."""
         assert hass.states.get(wemo_entity.entity_id).state == self.EXPECTED_STATE_VALUE
 

@@ -1,28 +1,30 @@
 """Support for Overkiz sirens."""
+
 from typing import Any
 
 from pyoverkiz.enums import OverkizState
 from pyoverkiz.enums.command import OverkizCommand, OverkizCommandParam
 
-from homeassistant.components.siren import SirenEntity, SirenEntityFeature
-from homeassistant.components.siren.const import ATTR_DURATION
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.siren import (
+    ATTR_DURATION,
+    SirenEntity,
+    SirenEntityFeature,
+)
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import HomeAssistantOverkizData
-from .const import DOMAIN
+from . import OverkizDataConfigEntry
 from .entity import OverkizEntity
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: OverkizDataConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Overkiz sirens from a config entry."""
-    data: HomeAssistantOverkizData = hass.data[DOMAIN][entry.entry_id]
+    data = entry.runtime_data
 
     async_add_entities(
         OverkizSiren(device.device_url, data.coordinator)

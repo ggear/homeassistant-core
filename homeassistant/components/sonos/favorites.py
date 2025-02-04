@@ -1,4 +1,5 @@
 """Class representing Sonos favorites."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -32,7 +33,7 @@ class SonosFavorites(SonosHouseholdCoordinator):
         self._favorites: list[DidlFavorite] = []
         self.last_polled_ids: dict[str, int] = {}
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[DidlFavorite]:
         """Return an iterator for the known favorites."""
         favorites = self._favorites.copy()
         return iter(favorites)

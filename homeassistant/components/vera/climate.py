@@ -1,29 +1,26 @@
 """Support for Vera thermostats."""
+
 from __future__ import annotations
 
 from typing import Any
 
 import pyvera as veraApi
 
-from homeassistant.components.climate import ENTITY_ID_FORMAT, ClimateEntity
-from homeassistant.components.climate.const import (
+from homeassistant.components.climate import (
+    ENTITY_ID_FORMAT,
     FAN_AUTO,
     FAN_ON,
+    ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_TEMPERATURE,
-    TEMP_CELSIUS,
-    TEMP_FAHRENHEIT,
-    Platform,
-)
+from homeassistant.const import ATTR_TEMPERATURE, Platform, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import VeraDevice
 from .common import ControllerData, get_controller_data
+from .entity import VeraEntity
 
 FAN_OPERATION_LIST = [FAN_ON, FAN_AUTO]
 
@@ -46,19 +43,23 @@ async def async_setup_entry(
     )
 
 
-class VeraThermostat(VeraDevice[veraApi.VeraThermostat], ClimateEntity):
+class VeraThermostat(VeraEntity[veraApi.VeraThermostat], ClimateEntity):
     """Representation of a Vera Thermostat."""
 
     _attr_hvac_modes = SUPPORT_HVAC
+    _attr_fan_modes = FAN_OPERATION_LIST
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.FAN_MODE
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.FAN_MODE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
     )
 
     def __init__(
         self, vera_device: veraApi.VeraThermostat, controller_data: ControllerData
     ) -> None:
         """Initialize the Vera device."""
-        VeraDevice.__init__(self, vera_device, controller_data)
+        VeraEntity.__init__(self, vera_device, controller_data)
         self.entity_id = ENTITY_ID_FORMAT.format(self.vera_id)
 
     @property
@@ -83,12 +84,7 @@ class VeraThermostat(VeraDevice[veraApi.VeraThermostat], ClimateEntity):
             return FAN_ON
         return FAN_AUTO
 
-    @property
-    def fan_modes(self) -> list[str] | None:
-        """Return a list of available fan modes."""
-        return FAN_OPERATION_LIST
-
-    def set_fan_mode(self, fan_mode) -> None:
+    def set_fan_mode(self, fan_mode: str) -> None:
         """Set new target temperature."""
         if fan_mode == FAN_ON:
             self.vera_device.fan_on()
@@ -103,9 +99,9 @@ class VeraThermostat(VeraDevice[veraApi.VeraThermostat], ClimateEntity):
         vera_temp_units = self.vera_device.vera_controller.temperature_units
 
         if vera_temp_units == "F":
-            return TEMP_FAHRENHEIT
+            return UnitOfTemperature.FAHRENHEIT
 
-        return TEMP_CELSIUS
+        return UnitOfTemperature.CELSIUS
 
     @property
     def current_temperature(self) -> float | None:

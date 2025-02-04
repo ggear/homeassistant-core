@@ -1,11 +1,13 @@
 """Demo fan platform that has a fake fan."""
+
 from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 PRESET_MODE_AUTO = "auto"
 PRESET_MODE_SMART = "smart"
@@ -13,18 +15,23 @@ PRESET_MODE_SLEEP = "sleep"
 PRESET_MODE_ON = "on"
 
 FULL_SUPPORT = (
-    FanEntityFeature.SET_SPEED | FanEntityFeature.OSCILLATE | FanEntityFeature.DIRECTION
+    FanEntityFeature.SET_SPEED
+    | FanEntityFeature.OSCILLATE
+    | FanEntityFeature.DIRECTION
+    | FanEntityFeature.TURN_OFF
+    | FanEntityFeature.TURN_ON
 )
-LIMITED_SUPPORT = FanEntityFeature.SET_SPEED
+LIMITED_SUPPORT = (
+    FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+)
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the demo fan platform."""
+    """Set up the Demo config entry."""
     async_add_entities(
         [
             DemoPercentageFan(
@@ -74,7 +81,9 @@ async def async_setup_platform(
                 hass,
                 "fan5",
                 "Preset Only Limited Fan",
-                FanEntityFeature.PRESET_MODE,
+                FanEntityFeature.PRESET_MODE
+                | FanEntityFeature.TURN_OFF
+                | FanEntityFeature.TURN_ON,
                 [
                     PRESET_MODE_AUTO,
                     PRESET_MODE_SMART,
@@ -86,55 +95,39 @@ async def async_setup_platform(
     )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the Demo config entry."""
-    await async_setup_platform(hass, {}, async_add_entities)
-
-
 class BaseDemoFan(FanEntity):
     """A demonstration fan component that uses legacy fan speeds."""
 
+    _attr_should_poll = False
+    _attr_translation_key = "demo"
+
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         unique_id: str,
         name: str,
-        supported_features: int,
+        supported_features: FanEntityFeature,
         preset_modes: list[str] | None,
     ) -> None:
         """Initialize the entity."""
         self.hass = hass
         self._unique_id = unique_id
-        self._supported_features = supported_features
+        self._attr_supported_features = supported_features
         self._percentage: int | None = None
         self._preset_modes = preset_modes
         self._preset_mode: str | None = None
         self._oscillating: bool | None = None
         self._direction: str | None = None
-        self._name = name
+        self._attr_name = name
         if supported_features & FanEntityFeature.OSCILLATE:
             self._oscillating = False
         if supported_features & FanEntityFeature.DIRECTION:
             self._direction = "forward"
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return the unique id."""
         return self._unique_id
-
-    @property
-    def name(self) -> str:
-        """Get entity name."""
-        return self._name
-
-    @property
-    def should_poll(self):
-        """No polling needed for a demo fan."""
-        return False
 
     @property
     def current_direction(self) -> str | None:
@@ -145,11 +138,6 @@ class BaseDemoFan(FanEntity):
     def oscillating(self) -> bool | None:
         """Oscillating."""
         return self._oscillating
-
-    @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        return self._supported_features
 
 
 class DemoPercentageFan(BaseDemoFan, FanEntity):
@@ -183,18 +171,15 @@ class DemoPercentageFan(BaseDemoFan, FanEntity):
 
     def set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        if self.preset_modes and preset_mode in self.preset_modes:
-            self._preset_mode = preset_mode
-            self._percentage = None
-            self.schedule_update_ha_state()
-        else:
-            raise ValueError(f"Invalid preset mode: {preset_mode}")
+        self._preset_mode = preset_mode
+        self._percentage = None
+        self.schedule_update_ha_state()
 
     def turn_on(
         self,
-        percentage: int = None,
-        preset_mode: str = None,
-        **kwargs,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
+        **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
         if preset_mode:
@@ -206,7 +191,7 @@ class DemoPercentageFan(BaseDemoFan, FanEntity):
 
         self.set_percentage(percentage)
 
-    def turn_off(self, **kwargs) -> None:
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
         self.set_percentage(0)
 
@@ -252,19 +237,15 @@ class AsyncDemoPercentageFan(BaseDemoFan, FanEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        if self.preset_modes is None or preset_mode not in self.preset_modes:
-            raise ValueError(
-                f"{preset_mode} is not a valid preset_mode: {self.preset_modes}"
-            )
         self._preset_mode = preset_mode
         self._percentage = None
         self.async_write_ha_state()
 
     async def async_turn_on(
         self,
-        percentage: int = None,
-        preset_mode: str = None,
-        **kwargs,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
+        **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
         if preset_mode:
@@ -276,7 +257,7 @@ class AsyncDemoPercentageFan(BaseDemoFan, FanEntity):
 
         await self.async_set_percentage(percentage)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
         await self.async_oscillate(False)
         await self.async_set_percentage(0)

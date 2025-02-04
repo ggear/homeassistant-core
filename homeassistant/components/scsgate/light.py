@@ -1,12 +1,18 @@
 """Support for SCSGate lights."""
+
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from scsgate.tasks import ToggleStatusTask
 import voluptuous as vol
 
-from homeassistant.components.light import PLATFORM_SCHEMA, ColorMode, LightEntity
+from homeassistant.components.light import (
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
+    ColorMode,
+    LightEntity,
+)
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_STATE, CONF_DEVICES, CONF_NAME
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
@@ -15,7 +21,7 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import CONF_SCS_ID, DOMAIN, SCSGATE_SCHEMA
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_DEVICES): cv.schema_with_slug_keys(SCSGATE_SCHEMA)}
 )
 
@@ -76,7 +82,7 @@ class SCSGateLight(LightEntity):
         """Return true if light is on."""
         return self._toggled
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn the device on."""
 
         self._scsgate.append_task(ToggleStatusTask(target=self._scs_id, toggled=True))
@@ -84,7 +90,7 @@ class SCSGateLight(LightEntity):
         self._toggled = True
         self.schedule_update_ha_state()
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
 
         self._scsgate.append_task(ToggleStatusTask(target=self._scs_id, toggled=False))

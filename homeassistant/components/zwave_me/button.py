@@ -1,5 +1,4 @@
 """Representation of a toggleButton."""
-from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -7,8 +6,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ZWaveMeEntity
 from .const import DOMAIN, ZWaveMePlatform
+from .entity import ZWaveMeEntity
 
 DEVICE_NAME = ZWaveMePlatform.BUTTON
 
@@ -41,6 +40,6 @@ async def async_setup_entry(
 class ZWaveMeButton(ZWaveMeEntity, ButtonEntity):
     """Representation of a ZWaveMe button."""
 
-    def press(self, **kwargs: Any) -> None:
+    def press(self) -> None:
         """Turn the entity on."""
         self.controller.zwave_api.send_command(self.device.id, "on")

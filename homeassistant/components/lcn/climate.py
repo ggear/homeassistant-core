@@ -1,49 +1,56 @@
 """Support for LCN climate control."""
-from __future__ import annotations
 
+from collections.abc import Iterable
+from functools import partial
 from typing import Any, cast
 
 import pypck
 
-from homeassistant.components.climate import DOMAIN as DOMAIN_CLIMATE, ClimateEntity
-from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
+from homeassistant.components.climate import (
+    DOMAIN as DOMAIN_CLIMATE,
+    ClimateEntity,
+    ClimateEntityFeature,
+    HVACMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_ADDRESS,
     CONF_DOMAIN,
     CONF_ENTITIES,
     CONF_SOURCE,
     CONF_UNIT_OF_MEASUREMENT,
-    TEMP_CELSIUS,
-    TEMP_FAHRENHEIT,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType
 
-from . import LcnEntity
 from .const import (
+    ADD_ENTITIES_CALLBACKS,
     CONF_DOMAIN_DATA,
     CONF_LOCKABLE,
     CONF_MAX_TEMP,
     CONF_MIN_TEMP,
     CONF_SETPOINT,
+    DOMAIN,
 )
-from .helpers import DeviceConnectionType, InputType, get_device_connection
+from .entity import LcnEntity
+from .helpers import InputType
 
 PARALLEL_UPDATES = 0
 
 
-def create_lcn_climate_entity(
-    hass: HomeAssistant, entity_config: ConfigType, config_entry: ConfigEntry
-) -> LcnEntity:
-    """Set up an entity for this domain."""
-    device_connection = get_device_connection(
-        hass, entity_config[CONF_ADDRESS], config_entry
-    )
+def add_lcn_entities(
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+    entity_configs: Iterable[ConfigType],
+) -> None:
+    """Add entities for this domain."""
+    entities = [
+        LcnClimate(entity_config, config_entry) for entity_config in entity_configs
+    ]
 
-    return LcnClimate(entity_config, config_entry.entry_id, device_connection)
+    async_add_entities(entities)
 
 
 async def async_setup_entry(
@@ -52,27 +59,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up LCN switch entities from a config entry."""
-    entities = []
+    add_entities = partial(
+        add_lcn_entities,
+        config_entry,
+        async_add_entities,
+    )
 
-    for entity_config in config_entry.data[CONF_ENTITIES]:
-        if entity_config[CONF_DOMAIN] == DOMAIN_CLIMATE:
-            entities.append(
-                create_lcn_climate_entity(hass, entity_config, config_entry)
-            )
+    hass.data[DOMAIN][config_entry.entry_id][ADD_ENTITIES_CALLBACKS].update(
+        {DOMAIN_CLIMATE: add_entities}
+    )
 
-    async_add_entities(entities)
+    add_entities(
+        (
+            entity_config
+            for entity_config in config_entry.data[CONF_ENTITIES]
+            if entity_config[CONF_DOMAIN] == DOMAIN_CLIMATE
+        ),
+    )
 
 
 class LcnClimate(LcnEntity, ClimateEntity):
     """Representation of a LCN climate device."""
 
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-
-    def __init__(
-        self, config: ConfigType, entry_id: str, device_connection: DeviceConnectionType
-    ) -> None:
+    def __init__(self, config: ConfigType, config_entry: ConfigEntry) -> None:
         """Initialize of a LCN climate device."""
-        super().__init__(config, entry_id, device_connection)
+        super().__init__(config, config_entry)
 
         self.variable = pypck.lcn_defs.Var[config[CONF_DOMAIN_DATA][CONF_SOURCE]]
         self.setpoint = pypck.lcn_defs.Var[config[CONF_DOMAIN_DATA][CONF_SETPOINT]]
@@ -92,6 +103,11 @@ class LcnClimate(LcnEntity, ClimateEntity):
         self._attr_hvac_modes = [HVACMode.HEAT]
         if self.is_lockable:
             self._attr_hvac_modes.append(HVACMode.OFF)
+        self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+        if len(self.hvac_modes) > 1:
+            self._attr_supported_features |= (
+                ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
+            )
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -110,10 +126,10 @@ class LcnClimate(LcnEntity, ClimateEntity):
     @property
     def temperature_unit(self) -> str:
         """Return the unit of measurement."""
-        # Config schema only allows for: TEMP_CELSIUS and TEMP_FAHRENHEIT
+        # Config schema only allows for: UnitOfTemperature.CELSIUS and UnitOfTemperature.FAHRENHEIT
         if self.unit == pypck.lcn_defs.VarUnit.FAHRENHEIT:
-            return TEMP_FAHRENHEIT
-        return TEMP_CELSIUS
+            return UnitOfTemperature.FAHRENHEIT
+        return UnitOfTemperature.CELSIUS
 
     @property
     def current_temperature(self) -> float | None:

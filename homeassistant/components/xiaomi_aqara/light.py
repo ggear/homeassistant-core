@@ -1,7 +1,9 @@
 """Support for Xiaomi Gateway Light."""
+
 import binascii
 import logging
 import struct
+from typing import Any
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -14,8 +16,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.color as color_util
 
-from . import XiaomiDevice
 from .const import DOMAIN, GATEWAYS_KEY
+from .entity import XiaomiDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,8 +71,7 @@ class XiaomiGatewayLight(XiaomiDevice, LightEntity):
         rgbhexstr = f"{value:x}"
         if len(rgbhexstr) > 8:
             _LOGGER.error(
-                "Light RGB data error."
-                " Can't be more than 8 characters. Received: %s",
+                "Light RGB data error. Can't be more than 8 characters. Received: %s",
                 rgbhexstr,
             )
             return False
@@ -105,7 +106,7 @@ class XiaomiGatewayLight(XiaomiDevice, LightEntity):
             self._brightness = int(100 * kwargs[ATTR_BRIGHTNESS] / 255)
 
         rgb = color_util.color_hs_to_RGB(*self._hs)
-        rgba = (self._brightness,) + rgb
+        rgba = (self._brightness, *rgb)
         rgbhex = binascii.hexlify(struct.pack("BBBB", *rgba)).decode("ASCII")
         rgbhex = int(rgbhex, 16)
 
@@ -113,7 +114,7 @@ class XiaomiGatewayLight(XiaomiDevice, LightEntity):
             self._state = True
             self.schedule_update_ha_state()
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         if self._write_to_hub(self._sid, **{self._data_key: 0}):
             self._state = False

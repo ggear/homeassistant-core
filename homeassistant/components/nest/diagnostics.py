@@ -5,45 +5,26 @@ from __future__ import annotations
 from typing import Any
 
 from google_nest_sdm import diagnostics
-from google_nest_sdm.device import Device
 from google_nest_sdm.device_traits import InfoTrait
-from google_nest_sdm.exceptions import ApiException
 
 from homeassistant.components.camera import diagnostics as camera_diagnostics
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .const import DATA_SDM, DATA_SUBSCRIBER, DOMAIN
+from .types import NestConfigEntry
 
 REDACT_DEVICE_TRAITS = {InfoTrait.NAME}
 
 
-async def _get_nest_devices(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> dict[str, Device]:
-    """Return dict of available devices."""
-    if DATA_SDM not in config_entry.data:
-        return {}
-
-    if DATA_SUBSCRIBER not in hass.data[DOMAIN]:
-        return {}
-
-    subscriber = hass.data[DOMAIN][DATA_SUBSCRIBER]
-    device_manager = await subscriber.async_get_device_manager()
-    devices: dict[str, Device] = device_manager.devices
-    return devices
-
-
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> dict:
+    hass: HomeAssistant, config_entry: NestConfigEntry
+) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    try:
-        nest_devices = await _get_nest_devices(hass, config_entry)
-    except ApiException as err:
-        return {"error": str(err)}
-    if not nest_devices:
+    if (
+        not hasattr(config_entry, "runtime_data")
+        or not config_entry.runtime_data
+        or not (nest_devices := config_entry.runtime_data.device_manager.devices)
+    ):
         return {}
     data: dict[str, Any] = {
         **diagnostics.get_diagnostics(),
@@ -61,14 +42,11 @@ async def async_get_config_entry_diagnostics(
 
 async def async_get_device_diagnostics(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: NestConfigEntry,
     device: DeviceEntry,
-) -> dict:
+) -> dict[str, Any]:
     """Return diagnostics for a device."""
-    try:
-        nest_devices = await _get_nest_devices(hass, config_entry)
-    except ApiException as err:
-        return {"error": str(err)}
+    nest_devices = config_entry.runtime_data.device_manager.devices
     nest_device_id = next(iter(device.identifiers))[1]
     nest_device = nest_devices.get(nest_device_id)
     return nest_device.get_diagnostics() if nest_device else {}

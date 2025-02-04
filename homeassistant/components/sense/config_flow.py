@@ -1,5 +1,9 @@
 """Config flow for Sense integration."""
+
+from collections.abc import Mapping
+from functools import partial
 import logging
+from typing import Any
 
 from sense_energy import (
     ASyncSenseable,
@@ -8,7 +12,7 @@ from sense_energy import (
 )
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_CODE, CONF_EMAIL, CONF_PASSWORD, CONF_TIMEOUT
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -25,18 +29,18 @@ DATA_SCHEMA = vol.Schema(
 )
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class SenseConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Sense."""
 
     VERSION = 1
 
-    def __init__(self):
-        """Init Config ."""
-        self._gateway = None
-        self._auth_data = {}
-        super().__init__()
+    _gateway: ASyncSenseable
 
-    async def validate_input(self, data):
+    def __init__(self) -> None:
+        """Init Config ."""
+        self._auth_data: dict[str, Any] = {}
+
+    async def validate_input(self, data: Mapping[str, Any]) -> None:
         """Validate the user input allows us to connect.
 
         Data has the keys from DATA_SCHEMA with values provided by the user.
@@ -45,18 +49,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         timeout = self._auth_data[CONF_TIMEOUT]
         client_session = async_get_clientsession(self.hass)
 
-        self._gateway = ASyncSenseable(
-            api_timeout=timeout, wss_timeout=timeout, client_session=client_session
+        # Creating the AsyncSenseable object loads
+        # ssl certificates which does blocking IO
+        self._gateway = await self.hass.async_add_executor_job(
+            partial(
+                ASyncSenseable,
+                api_timeout=timeout,
+                wss_timeout=timeout,
+                client_session=client_session,
+            )
         )
         self._gateway.rate_limit = ACTIVE_UPDATE_RATE
         await self._gateway.authenticate(
             self._auth_data[CONF_EMAIL], self._auth_data[CONF_PASSWORD]
         )
 
-    async def create_entry_from_data(self):
+    async def create_entry_from_data(self) -> ConfigFlowResult:
         """Create the entry from the config data."""
         self._auth_data["access_token"] = self._gateway.sense_access_token
         self._auth_data["user_id"] = self._gateway.sense_user_id
+        self._auth_data["device_id"] = self._gateway.device_id
+        self._auth_data["refresh_token"] = self._gateway.refresh_token
         self._auth_data["monitor_id"] = self._gateway.sense_monitor_id
         existing_entry = await self.async_set_unique_id(self._auth_data[CONF_EMAIL])
         if not existing_entry:
@@ -64,13 +77,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=self._auth_data[CONF_EMAIL], data=self._auth_data
             )
 
-        self.hass.config_entries.async_update_entry(
-            existing_entry, data=self._auth_data
-        )
-        await self.hass.config_entries.async_reload(existing_entry.entry_id)
-        return self.async_abort(reason="reauth_successful")
+        return self.async_update_reload_and_abort(existing_entry, data=self._auth_data)
 
-    async def validate_input_and_create_entry(self, user_input, errors):
+    async def validate_input_and_create_entry(
+        self, user_input: Mapping[str, Any], errors: dict[str, str]
+    ) -> ConfigFlowResult | None:
         """Validate the input and create the entry from the data."""
         try:
             await self.validate_input(user_input)
@@ -80,14 +91,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "cannot_connect"
         except SenseAuthenticationException:
             errors["base"] = "invalid_auth"
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
             return await self.create_entry_from_data()
         return None
 
-    async def async_step_validation(self, user_input=None):
+    async def async_step_validation(
+        self, user_input: dict[str, str] | None = None
+    ) -> ConfigFlowResult:
         """Handle validation (2fa) step."""
         errors = {}
         if user_input:
@@ -97,7 +110,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except SenseAuthenticationException:
                 errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
@@ -109,9 +122,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
             if result := await self.validate_input_and_create_entry(user_input, errors):
                 return result
@@ -120,14 +135,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
 
-    async def async_step_reauth(self, data):
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
         """Handle configuration by re-auth."""
-        self._auth_data = dict(data)
-        return await self.async_step_reauth_validate(data)
+        self._auth_data = dict(entry_data)
+        return await self.async_step_reauth_validate(entry_data)
 
-    async def async_step_reauth_validate(self, user_input=None):
+    async def async_step_reauth_validate(
+        self, user_input: Mapping[str, Any]
+    ) -> ConfigFlowResult:
         """Handle reauth and validation."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
             if result := await self.validate_input_and_create_entry(user_input, errors):
                 return result

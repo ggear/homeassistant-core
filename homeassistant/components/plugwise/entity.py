@@ -1,14 +1,15 @@
 """Generic Plugwise Entity Class."""
+
 from __future__ import annotations
 
-from typing import Any
+from plugwise.constants import GwEntityData
 
 from homeassistant.const import ATTR_NAME, ATTR_VIA_DEVICE, CONF_HOST
 from homeassistant.helpers.device_registry import (
     CONNECTION_NETWORK_MAC,
     CONNECTION_ZIGBEE,
+    DeviceInfo,
 )
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -17,6 +18,8 @@ from .coordinator import PlugwiseDataUpdateCoordinator
 
 class PlugwiseEntity(CoordinatorEntity[PlugwiseDataUpdateCoordinator]):
     """Represent a PlugWise Entity."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -44,9 +47,10 @@ class PlugwiseEntity(CoordinatorEntity[PlugwiseDataUpdateCoordinator]):
             connections=connections,
             manufacturer=data.get("vendor"),
             model=data.get("model"),
-            name=f"Smile {coordinator.data.gateway['smile_name']}",
-            sw_version=data.get("fw"),
-            hw_version=data.get("hw"),
+            model_id=data.get("model_id"),
+            name=coordinator.data.gateway["smile_name"],
+            sw_version=data.get("firmware"),
+            hw_version=data.get("hardware"),
         )
 
         if device_id != coordinator.data.gateway["gateway_id"]:
@@ -63,14 +67,13 @@ class PlugwiseEntity(CoordinatorEntity[PlugwiseDataUpdateCoordinator]):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return super().available and self._dev_id in self.coordinator.data.devices
+        return (
+            self._dev_id in self.coordinator.data.devices
+            and ("available" not in self.device or self.device["available"] is True)
+            and super().available
+        )
 
     @property
-    def device(self) -> dict[str, Any]:
+    def device(self) -> GwEntityData:
         """Return data for this device."""
         return self.coordinator.data.devices[self._dev_id]
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to updates."""
-        self._handle_coordinator_update()
-        await super().async_added_to_hass()

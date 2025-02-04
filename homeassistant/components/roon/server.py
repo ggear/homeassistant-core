@@ -1,10 +1,11 @@
 """Code to handle the api connection to a Roon server."""
+
 import asyncio
 import logging
 
 from roonapi import RoonApi, RoonDiscovery
 
-from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PORT, Platform
+from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PORT
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util.dt import utcnow
 
@@ -13,7 +14,6 @@ from .const import CONF_ROON_ID, ROON_APPINFO
 _LOGGER = logging.getLogger(__name__)
 INITIAL_SYNC_INTERVAL = 5
 FULL_SYNC_INTERVAL = 30
-PLATFORMS = [Platform.MEDIA_PLAYER]
 
 
 class RoonServer:
@@ -53,7 +53,6 @@ class RoonServer:
             (host, port) = get_roon_host()
             return RoonApi(ROON_APPINFO, token, host, port, blocking_init=True)
 
-        hass = self.hass
         core_id = self.config_entry.data.get(CONF_ROON_ID)
 
         self.roonapi = await self.hass.async_add_executor_job(get_roon_api)
@@ -67,11 +66,10 @@ class RoonServer:
             core_id if core_id is not None else self.config_entry.data[CONF_HOST]
         )
 
-        # initialize media_player platform
-        hass.config_entries.async_setup_platforms(self.config_entry, PLATFORMS)
-
         # Initialize Roon background polling
-        asyncio.create_task(self.async_do_loop())
+        self.config_entry.async_create_background_task(
+            self.hass, self.async_do_loop(), "roon.server-do-loop"
+        )
 
         return True
 
@@ -108,7 +106,7 @@ class RoonServer:
         self._exit = True
 
     def roonapi_state_callback(self, event, changed_zones):
-        """Callbacks from the roon api websockets."""
+        """Callbacks from the roon api websocket with state change."""
         self.hass.add_job(self.async_update_changed_players(changed_zones))
 
     async def async_do_loop(self):

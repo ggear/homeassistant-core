@@ -1,12 +1,15 @@
 """Support for FutureNow Ethernet unit outputs as Lights."""
+
 from __future__ import annotations
+
+from typing import Any
 
 import pyfnip
 import voluptuous as vol
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
 )
@@ -28,7 +31,7 @@ DEVICE_SCHEMA = vol.Schema(
     }
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_DRIVER): vol.In(CONF_DRIVER_TYPES),
         vol.Required(CONF_HOST): cv.string,
@@ -106,18 +109,18 @@ class FutureNowLight(LightEntity):
         return self._brightness
 
     @property
-    def color_mode(self) -> str:
+    def color_mode(self) -> ColorMode:
         """Return the color mode of the light."""
         if self._dimmable:
             return ColorMode.BRIGHTNESS
         return ColorMode.ONOFF
 
     @property
-    def supported_color_modes(self) -> set[str] | None:
+    def supported_color_modes(self) -> set[ColorMode]:
         """Flag supported color modes."""
         return {self.color_mode}
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
         if self._dimmable:
             level = kwargs.get(ATTR_BRIGHTNESS, self._last_brightness)
@@ -125,13 +128,13 @@ class FutureNowLight(LightEntity):
             level = 255
         self._light.turn_on(to_futurenow_level(level))
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         self._light.turn_off()
         if self._brightness:
             self._last_brightness = self._brightness
 
-    def update(self):
+    def update(self) -> None:
         """Fetch new state data for this light."""
         state = int(self._light.is_on())
         self._state = bool(state)

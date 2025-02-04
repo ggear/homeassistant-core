@@ -6,13 +6,13 @@ from typing import Any
 
 from pydeconz.models.event import EventType
 
-from homeassistant.components.scene import DOMAIN, Scene
+from homeassistant.components.scene import DOMAIN as SCENE_DOMAIN, Scene
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .deconz_device import DeconzSceneMixin
-from .gateway import get_gateway_from_config_entry
+from .entity import DeconzSceneMixin
+from .hub import DeconzHub
 
 
 async def async_setup_entry(
@@ -21,31 +21,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up scenes for deCONZ integration."""
-    gateway = get_gateway_from_config_entry(hass, config_entry)
-    gateway.entities[DOMAIN] = set()
+    hub = DeconzHub.get_hub(hass, config_entry)
+    hub.entities[SCENE_DOMAIN] = set()
 
     @callback
     def async_add_scene(_: EventType, scene_id: str) -> None:
         """Add scene from deCONZ."""
-        scene = gateway.api.scenes[scene_id]
-        async_add_entities([DeconzScene(scene, gateway)])
+        scene = hub.api.scenes[scene_id]
+        async_add_entities([DeconzScene(scene, hub)])
 
-    config_entry.async_on_unload(
-        gateway.api.scenes.subscribe(
-            async_add_scene,
-            EventType.ADDED,
-        )
+    hub.register_platform_add_device_callback(
+        async_add_scene,
+        hub.api.scenes,
     )
-
-    for scene_id in gateway.api.scenes:
-        async_add_scene(EventType.ADDED, scene_id)
 
 
 class DeconzScene(DeconzSceneMixin, Scene):
     """Representation of a deCONZ scene."""
 
-    TYPE = DOMAIN
+    TYPE = SCENE_DOMAIN
 
     async def async_activate(self, **kwargs: Any) -> None:
         """Activate the scene."""
-        await self._device.recall()
+        await self.hub.api.scenes.recall(
+            self._device.group_id,
+            self._device.id,
+        )

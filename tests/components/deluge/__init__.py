@@ -5,14 +5,7 @@ from homeassistant.components.deluge.const import (
     DEFAULT_RPC_PORT,
     DEFAULT_WEB_PORT,
 )
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_MONITORED_VARIABLES,
-    CONF_NAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-)
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 
 CONF_DATA = {
     CONF_HOST: "1.2.3.4",
@@ -22,11 +15,9 @@ CONF_DATA = {
     CONF_WEB_PORT: DEFAULT_WEB_PORT,
 }
 
-IMPORT_DATA = {
-    CONF_HOST: "1.2.3.4",
-    CONF_NAME: "Deluge Torrent",
-    CONF_MONITORED_VARIABLES: ["current_status", "download_speed", "upload_speed"],
-    CONF_USERNAME: "user",
-    CONF_PASSWORD: "password",
-    CONF_PORT: DEFAULT_RPC_PORT,
+GET_TORRENT_STATUS_RESPONSE = {
+    "upload_rate": 3462.0,
+    "download_rate": 98.5,
+    "dht_upload_rate": 7818.0,
+    "dht_download_rate": 2658.0,
 }

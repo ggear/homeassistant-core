@@ -1,11 +1,13 @@
 """Support for Dynalite channels as lights."""
 
-from homeassistant.components.light import ColorMode, LightEntity
+from typing import Any
+
+from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .dynalitebase import DynaliteBase, async_setup_entry_base
+from .entity import DynaliteBase, async_setup_entry_base
 
 
 async def async_setup_entry(
@@ -35,10 +37,16 @@ class DynaliteLight(DynaliteBase, LightEntity):
         """Return true if device is on."""
         return self._device.is_on
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
         await self._device.async_turn_on(**kwargs)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         await self._device.async_turn_off(**kwargs)
+
+    def initialize_state(self, state):
+        """Initialize the state from cache."""
+        target_level = state.attributes.get(ATTR_BRIGHTNESS)
+        if target_level is not None:
+            self._device.init_level(target_level)

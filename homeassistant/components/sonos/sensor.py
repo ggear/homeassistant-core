@@ -1,14 +1,14 @@
 """Entity representing a Sonos battery level."""
+
 from __future__ import annotations
 
 import logging
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -86,7 +86,6 @@ class SonosBatteryEntity(SonosEntity, SensorEntity):
         """Initialize the battery sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{self.soco.uid}-battery"
-        self._attr_name = f"{self.speaker.zone_name} Battery"
 
     async def _async_fallback_poll(self) -> None:
         """Poll the device for the current state."""
@@ -100,21 +99,20 @@ class SonosBatteryEntity(SonosEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return whether this device is available."""
-        return self.speaker.available and self.speaker.power_source
+        return self.speaker.available and self.speaker.power_source is not None
 
 
 class SonosAudioInputFormatSensorEntity(SonosPollingEntity, SensorEntity):
     """Representation of a Sonos audio import format sensor entity."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:import"
+    _attr_translation_key = "audio_input_format"
     _attr_should_poll = True
 
     def __init__(self, speaker: SonosSpeaker, audio_format: str) -> None:
         """Initialize the audio input format sensor."""
         super().__init__(speaker)
         self._attr_unique_id = f"{self.soco.uid}-audio-format"
-        self._attr_name = f"{self.speaker.zone_name} Audio Input Format"
         self._attr_native_value = audio_format
 
     def poll_state(self) -> None:
@@ -136,8 +134,8 @@ class SonosFavoritesEntity(SensorEntity):
     """Representation of a Sonos favorites info entity."""
 
     _attr_entity_registry_enabled_default = False
-    _attr_icon = "mdi:star"
-    _attr_name = "Sonos Favorites"
+    _attr_name = "Sonos favorites"
+    _attr_translation_key = "favorites"
     _attr_native_unit_of_measurement = "items"
     _attr_should_poll = False
 

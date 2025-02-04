@@ -1,15 +1,23 @@
 """Code to handle a Motion Gateway."""
+
 import contextlib
 import logging
 import socket
 
-from motionblinds import AsyncMotionMulticast, MotionGateway
+from motionblinds import DEVICE_TYPES_WIFI, AsyncMotionMulticast, MotionGateway
 
 from homeassistant.components import network
 
 from .const import DEFAULT_INTERFACE
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def device_name(blind):
+    """Construct common name part of a device."""
+    if blind.device_type in DEVICE_TYPES_WIFI:
+        return blind.blind_type
+    return f"{blind.blind_type} {blind.mac[12:]}"
 
 
 class ConnectMotionGateway:
@@ -43,7 +51,7 @@ class ConnectMotionGateway:
         try:
             # update device info and get the connected sub devices
             await self._hass.async_add_executor_job(self.update_gateway)
-        except socket.timeout:
+        except TimeoutError:
             _LOGGER.error(
                 "Timeout trying to connect to Motion Gateway with host %s", host
             )
@@ -93,13 +101,15 @@ class ConnectMotionGateway:
         interfaces = await self.async_get_interfaces()
         for interface in interfaces:
             _LOGGER.debug(
-                "Checking Motion Blinds interface '%s' with host %s", interface, host
+                "Checking Motionblinds interface '%s' with host %s", interface, host
             )
             # initialize multicast listener
             check_multicast = AsyncMotionMulticast(interface=interface)
             try:
                 await check_multicast.Start_listen()
             except socket.gaierror:
+                continue
+            except OSError:
                 continue
 
             # trigger test multicast
@@ -117,14 +127,17 @@ class ConnectMotionGateway:
             if result:
                 # successfully received multicast
                 _LOGGER.debug(
-                    "Success using Motion Blinds interface '%s' with host %s",
+                    "Success using Motionblinds interface '%s' with host %s",
                     interface,
                     host,
                 )
                 return interface
 
         _LOGGER.error(
-            "Could not find working interface for Motion Blinds host %s, using interface '%s'",
+            (
+                "Could not find working interface for Motionblinds host %s, using"
+                " interface '%s'"
+            ),
             host,
             self._interface,
         )
