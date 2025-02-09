@@ -134,13 +134,16 @@ async def get_manually_configured_devices(config_path="/config/network_devices.j
         with open(config_path, 'r') as file:
             try:
                 for device_network_config in json.load(file):
-                    if "IP" in device_network_config and device_network_config["IP"] != "" and \
-                        "MAC" in device_network_config and device_network_config["MAC"] != "":
+                    if ( \
+                                    "IP" in device_network_config and device_network_config["IP"] != "" and \
+                                    "MAC" in device_network_config and device_network_config["MAC"] != "" and \
+                                    "Manufacturer" in device_network_config and device_network_config["Manufacturer"] == "TPLink"
+                    ):
                         device_instance = SmartDevice(device_network_config["IP"])
                         try:
                             await device_instance.connect(config=DeviceConfig(
                                 host=device_network_config["IP"],
-                                timeout=5,
+                                timeout=1,
                             ))
                             await device_instance.update()
                             await device_instance.disconnect()
@@ -149,7 +152,7 @@ async def get_manually_configured_devices(config_path="/config/network_devices.j
                                           device_instance.alias, device_network_config["IP"])
                         except Exception as error:
                             _LOGGER.warning("Manual network configration for device [%s] found, "
-                                            "but failed to connect with error: %s",
+                                            "but failed with connection error: %s",
                                             device_network_config["IP"], error)
                 _LOGGER.debug("Completed manual configuration, found [%s] devices", len(device_instances))
             except Exception as error:
