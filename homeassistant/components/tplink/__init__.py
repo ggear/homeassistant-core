@@ -79,8 +79,8 @@ def create_async_tplink_clientsession(hass: HomeAssistant) -> ClientSession:
 
 @callback
 def async_trigger_discovery(
-        hass: HomeAssistant,
-        discovered_devices: dict[str, Device],
+    hass: HomeAssistant,
+    discovered_devices: dict[str, Device],
 ) -> None:
     """Trigger config flows for discovered devices."""
 
@@ -123,7 +123,6 @@ async def async_discover_devices(hass: HomeAssistant) -> dict[str, Device]:
 
     return discovered_devices
 
-
 # HACK-GRAHAM-Start: Inject devices defined in static config into discovery workflow
 async def get_manually_configured_devices(config_path="/config/network_devices.json"):
     import os
@@ -155,8 +154,6 @@ async def get_manually_configured_devices(config_path="/config/network_devices.j
     else:
         _LOGGER.warning("Error reading JSON file [%s]: File not found", config_path)
     return device_instances
-
-
 # HACK-GRAHAM-Finish
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -375,8 +372,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     new_minor_version = 3
     if (
-            entry_version == 1
-            and entry_minor_version < new_minor_version <= config_flow_minor_version
+        entry_version == 1
+        and entry_minor_version < new_minor_version <= config_flow_minor_version
     ):
         _LOGGER.debug(
             "Migrating from version %s.%s", entry_version, entry_minor_version
@@ -397,13 +394,13 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             # Nothing to fix if there's only one identifier. mac connection
             # should never be none but if it is there's no problem.
             if len(tplink_identifiers) <= 1 or not (
-                    mac := _mac_connection_or_none(device)
+                mac := _mac_connection_or_none(device)
             ):
                 continue
             if not (
-                    tplink_parent_device_id := _device_id_is_mac_or_none(
-                        mac, tplink_identifiers
-                    )
+                tplink_parent_device_id := _device_id_is_mac_or_none(
+                    mac, tplink_identifiers
+                )
             ):
                 # No match on mac so raise an error.
                 _LOGGER.error(
@@ -437,8 +434,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     new_minor_version = 4
     if (
-            entry_version == 1
-            and entry_minor_version < new_minor_version <= config_flow_minor_version
+        entry_version == 1
+        and entry_minor_version < new_minor_version <= config_flow_minor_version
     ):
         # credentials_hash stored in the device_config should be moved to data.
         updates: dict[str, Any] = {}
@@ -461,8 +458,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     new_minor_version = 5
     if (
-            entry_version == 1
-            and entry_minor_version < new_minor_version <= config_flow_minor_version
+        entry_version == 1
+        and entry_minor_version < new_minor_version <= config_flow_minor_version
     ):
         # complete device config no longer to be stored, only required
         # attributes like connection parameters and aes_keys
