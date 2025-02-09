@@ -134,11 +134,14 @@ async def get_manually_configured_devices(config_path="/config/network_devices.j
         with open(config_path, 'r') as file:
             try:
                 for device_network_config in json.load(file):
-                    if "MAC" in device_network_config and device_network_config["MAC"] != "" and \
-                            "IP" in device_network_config and device_network_config["IP"] != "":
+                    if "IP" in device_network_config and device_network_config["IP"] != "" and \
+                        "MAC" in device_network_config and device_network_config["MAC"] != "":
                         device_instance = SmartDevice(device_network_config["IP"])
                         try:
-                            await device_instance.connect(config=DeviceConfig(host=device_network_config["IP"], timeout=5))
+                            await device_instance.connect(config=DeviceConfig(
+                                host=device_network_config["IP"],
+                                timeout=5,
+                            ))
                             await device_instance.update()
                             await device_instance.disconnect()
                             device_instances[device_network_config["MAC"]] = device_instance
