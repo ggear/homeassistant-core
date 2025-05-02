@@ -73,6 +73,19 @@ class HomeConnectApplianceData:
         self.settings.update(other.settings)
         self.status.update(other.status)
 
+    @classmethod
+    def empty(cls, appliance: HomeAppliance) -> HomeConnectApplianceData:
+        """Return empty data."""
+        return cls(
+            commands=set(),
+            events={},
+            info=appliance,
+            options={},
+            programs=[],
+            settings={},
+            status={},
+        )
+
 
 class HomeConnectCoordinator(
     DataUpdateCoordinator[dict[str, HomeConnectApplianceData]]
@@ -155,7 +168,7 @@ class HomeConnectCoordinator(
             f"home_connect-events_listener_task-{self.config_entry.entry_id}",
         )
 
-    async def _event_listener(self) -> None:  # noqa: C901
+    async def _event_listener(self) -> None:
         """Match event with listener for event type."""
         retry_time = 10
         while True:
@@ -191,7 +204,7 @@ class HomeConnectCoordinator(
                             events = self.data[event_message_ha_id].events
                             for event in event_message.data.items:
                                 event_key = event.key
-                                if event_key in SettingKey:
+                                if event_key in SettingKey.__members__.values():  # type: ignore[comparison-overlap]
                                     setting_key = SettingKey(event_key)
                                     if setting_key in settings:
                                         settings[setting_key].value = event.value
@@ -228,19 +241,17 @@ class HomeConnectCoordinator(
                             appliance_data = await self._get_appliance_data(
                                 appliance_info, self.data.get(appliance_info.ha_id)
                             )
-                            if event_message_ha_id in self.data:
-                                self.data[event_message_ha_id].update(appliance_data)
-                            else:
+                            if event_message_ha_id not in self.data:
                                 self.data[event_message_ha_id] = appliance_data
-                            for listener, context in list(
-                                self._special_listeners.values()
-                            ) + list(self._listeners.values()):
-                                assert isinstance(context, tuple)
+                            for listener, context in self._special_listeners.values():
                                 if (
                                     EventKey.BSH_COMMON_APPLIANCE_DEPAIRED
                                     not in context
                                 ):
                                     listener()
+                            self._call_all_event_listeners_for_appliance(
+                                event_message_ha_id
+                            )
 
                         case EventType.DISCONNECTED:
                             self.data[event_message_ha_id].info.connected = False
@@ -267,7 +278,7 @@ class HomeConnectCoordinator(
                 _LOGGER.debug(
                     "Non-breaking error (%s) while listening for events,"
                     " continuing in %s seconds",
-                    type(error).__name__,
+                    error,
                     retry_time,
                 )
                 await asyncio_sleep(retry_time)
@@ -278,13 +289,6 @@ class HomeConnectCoordinator(
                     self.config_entry.entry_id
                 )
                 break
-
-            # Trigger to delete the possible depaired device entities
-            # from known_entities variable at common.py
-            for listener, context in self._special_listeners.values():
-                assert isinstance(context, tuple)
-                if EventKey.BSH_COMMON_APPLIANCE_DEPAIRED in context:
-                    listener()
 
     @callback
     def _call_event_listener(self, event_message: EventMessage) -> None:
@@ -365,15 +369,7 @@ class HomeConnectCoordinator(
                 model=appliance.vib,
             )
             if appliance.ha_id not in self.data:
-                self.data[appliance.ha_id] = HomeConnectApplianceData(
-                    commands=set(),
-                    events={},
-                    info=appliance,
-                    options={},
-                    programs=[],
-                    settings={},
-                    status={},
-                )
+                self.data[appliance.ha_id] = HomeConnectApplianceData.empty(appliance)
             else:
                 self.data[appliance.ha_id].info.connected = appliance.connected
                 old_appliances.remove(appliance.ha_id)
@@ -389,6 +385,13 @@ class HomeConnectCoordinator(
                     remove_config_entry_id=self.config_entry.entry_id,
                 )
 
+        # Trigger to delete the possible depaired device entities
+        # from known_entities variable at common.py
+        for listener, context in self._special_listeners.values():
+            assert isinstance(context, tuple)
+            if EventKey.BSH_COMMON_APPLIANCE_DEPAIRED in context:
+                listener()
+
     async def _get_appliance_data(
         self,
         appliance: HomeAppliance,
@@ -402,6 +405,15 @@ class HomeConnectCoordinator(
             name=appliance.name,
             model=appliance.vib,
         )
+        if not appliance.connected:
+            _LOGGER.debug(
+                "Appliance %s is not connected, skipping data fetch",
+                appliance.ha_id,
+            )
+            if appliance_data_to_update:
+                appliance_data_to_update.info.connected = False
+                return appliance_data_to_update
+            return HomeConnectApplianceData.empty(appliance)
         try:
             settings = {
                 setting.key: setting
@@ -415,9 +427,7 @@ class HomeConnectCoordinator(
             _LOGGER.debug(
                 "Error fetching settings for %s: %s",
                 appliance.ha_id,
-                error
-                if isinstance(error, HomeConnectApiError)
-                else type(error).__name__,
+                error,
             )
             settings = {}
         try:
@@ -431,9 +441,7 @@ class HomeConnectCoordinator(
             _LOGGER.debug(
                 "Error fetching status for %s: %s",
                 appliance.ha_id,
-                error
-                if isinstance(error, HomeConnectApiError)
-                else type(error).__name__,
+                error,
             )
             status = {}
 
@@ -449,9 +457,7 @@ class HomeConnectCoordinator(
                 _LOGGER.debug(
                     "Error fetching programs for %s: %s",
                     appliance.ha_id,
-                    error
-                    if isinstance(error, HomeConnectApiError)
-                    else type(error).__name__,
+                    error,
                 )
             else:
                 programs.extend(all_programs.programs)
@@ -545,9 +551,7 @@ class HomeConnectCoordinator(
             _LOGGER.debug(
                 "Error fetching options for %s: %s",
                 ha_id,
-                error
-                if isinstance(error, HomeConnectApiError)
-                else type(error).__name__,
+                error,
             )
             return {}
 

@@ -139,7 +139,7 @@ uuid==1000000000.0.0
 # these requirements are quite loose. As the entire stack has some outstanding issues, and
 # even newer versions seem to introduce new issues, it's useful for us to pin all these
 # requirements so we can directly link HA versions to these library versions.
-anyio==4.8.0
+anyio==4.9.0
 h11==0.14.0
 httpcore==1.0.7
 
@@ -241,6 +241,11 @@ async-timeout==4.0.3
 # https://github.com/home-assistant/core/issues/122508
 # https://github.com/home-assistant/core/issues/118004
 aiofiles>=24.1.0
+
+# multidict < 6.4.0 has memory leaks
+# https://github.com/aio-libs/multidict/issues/1134
+# https://github.com/aio-libs/multidict/issues/1131
+multidict>=6.4.2
 """
 
 GENERATED_MESSAGE = (
