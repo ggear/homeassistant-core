@@ -181,19 +181,19 @@ async def test_assist_api(
 
     assert len(llm.async_get_apis(hass)) == 1
     api = await llm.async_get_api(hass, "assist", llm_context)
-    assert len(api.tools) == 0
+    assert [tool.name for tool in api.tools] == ["GetLiveContext"]
 
     # Match all
     intent_handler.platforms = None
 
     api = await llm.async_get_api(hass, "assist", llm_context)
-    assert len(api.tools) == 1
+    assert [tool.name for tool in api.tools] == ["test_intent", "GetLiveContext"]
 
     # Match specific domain
     intent_handler.platforms = {"light"}
 
     api = await llm.async_get_api(hass, "assist", llm_context)
-    assert len(api.tools) == 1
+    assert len(api.tools) == 2
     tool = api.tools[0]
     assert tool.name == "test_intent"
     assert tool.description == "Execute Home Assistant test_intent intent"
@@ -575,7 +575,7 @@ async def test_assist_api_prompt(
             suggested_area="Test Area 2",
         )
     )
-    exposed_entities_prompt = """An overview of the areas and the devices in this smart home:
+    exposed_entities_prompt = """Live Context: An overview of the areas and the devices in this smart home:
 - names: Kitchen
   domain: light
   state: 'on'
@@ -623,6 +623,40 @@ async def test_assist_api_prompt(
   state: unavailable
   areas: Test Area 2
 """
+    stateless_exposed_entities_prompt = """Static Context: An overview of the areas and the devices in this smart home:
+- names: Kitchen
+  domain: light
+- names: Living Room
+  domain: light
+  areas: Test Area, Alternative name
+- names: Test Device, my test light
+  domain: light
+  areas: Test Area, Alternative name
+- names: Test Service
+  domain: light
+  areas: Test Area, Alternative name
+- names: Test Service
+  domain: light
+  areas: Test Area, Alternative name
+- names: Test Service
+  domain: light
+  areas: Test Area, Alternative name
+- names: Test Device 2
+  domain: light
+  areas: Test Area 2
+- names: Test Device 3
+  domain: light
+  areas: Test Area 2
+- names: Test Device 4
+  domain: light
+  areas: Test Area 2
+- names: Unnamed Device
+  domain: light
+  areas: Test Area 2
+- names: '1'
+  domain: light
+  areas: Test Area 2
+"""
     first_part_prompt = (
         "When controlling Home Assistant always call the intent tools. "
         "Use HassTurnOn to lock and HassTurnOff to unlock a lock. "
@@ -635,13 +669,35 @@ async def test_assist_api_prompt(
         "When a user asks to turn on all devices of a specific type, "
         "ask user to specify an area, unless there is only one device of that type."
     )
+    dynamic_context_prompt = """You ARE equipped to answer questions about the current state of
+the home using the `GetLiveContext` tool. This is a primary function. Do not state you lack the
+functionality if the question requires live data.
+If the user asks about device existence/type (e.g., "Do I have lights in the bedroom?"): Answer
+from the static context below.
+If the user asks about the CURRENT state, value, or mode (e.g., "Is the lock locked?",
+"Is the fan on?", "What mode is the thermostat in?", "What is the temperature outside?"):
+    1.  Recognize this requires live data.
+    2.  You MUST call `GetLiveContext`. This tool will provide the needed real-time information (like temperature from the local weather, lock status, etc.).
+    3.  Use the tool's response** to answer the user accurately (e.g., "The temperature outside is [value from tool].").
+For general knowledge questions not about the home: Answer truthfully from internal knowledge.
+"""
     api = await llm.async_get_api(hass, "assist", llm_context)
     assert api.api_prompt == (
         f"""{first_part_prompt}
 {area_prompt}
 {no_timer_prompt}
-{exposed_entities_prompt}"""
+{dynamic_context_prompt}
+{stateless_exposed_entities_prompt}"""
     )
+
+    # Verify that the GetLiveContext tool returns the same results as the exposed_entities_prompt
+    result = await api.async_call_tool(
+        llm.ToolInput(tool_name="GetLiveContext", tool_args={})
+    )
+    assert result == {
+        "success": True,
+        "result": exposed_entities_prompt,
+    }
 
     # Fake that request is made from a specific device ID with an area
     llm_context.device_id = device.id
@@ -654,7 +710,8 @@ async def test_assist_api_prompt(
         f"""{first_part_prompt}
 {area_prompt}
 {no_timer_prompt}
-{exposed_entities_prompt}"""
+{dynamic_context_prompt}
+{stateless_exposed_entities_prompt}"""
     )
 
     # Add floor
@@ -669,7 +726,8 @@ async def test_assist_api_prompt(
         f"""{first_part_prompt}
 {area_prompt}
 {no_timer_prompt}
-{exposed_entities_prompt}"""
+{dynamic_context_prompt}
+{stateless_exposed_entities_prompt}"""
     )
 
     # Register device for timers
@@ -680,7 +738,8 @@ async def test_assist_api_prompt(
     assert api.api_prompt == (
         f"""{first_part_prompt}
 {area_prompt}
-{exposed_entities_prompt}"""
+{dynamic_context_prompt}
+{stateless_exposed_entities_prompt}"""
     )
 
 
@@ -1267,3 +1326,19 @@ async def test_calendar_get_events_tool(hass: HomeAssistant) -> None:
         "start_date_time": now,
         "end_date_time": dt_util.start_of_local_day() + timedelta(days=7),
     }
+
+
+async def test_no_tools_exposed(hass: HomeAssistant) -> None:
+    """Test that tools are not exposed when no entities are exposed."""
+    assert await async_setup_component(hass, "homeassistant", {})
+    context = Context()
+    llm_context = llm.LLMContext(
+        platform="test_platform",
+        context=context,
+        user_prompt="test_text",
+        language="*",
+        assistant="conversation",
+        device_id=None,
+    )
+    api = await llm.async_get_api(hass, "assist", llm_context)
+    assert api.tools == []
