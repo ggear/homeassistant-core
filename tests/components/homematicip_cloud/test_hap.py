@@ -1,6 +1,6 @@
 """Test HomematicIP Cloud accesspoint."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from homematicip.auth import Auth
 from homematicip.connection.connection_context import ConnectionContext
@@ -16,6 +16,7 @@ from homeassistant.components.homematicip_cloud.const import (
 )
 from homeassistant.components.homematicip_cloud.errors import HmipcConnectionError
 from homeassistant.components.homematicip_cloud.hap import (
+    AsyncHome,
     HomematicipAuth,
     HomematicipHAP,
 )
@@ -119,14 +120,13 @@ async def test_hap_reset_unloads_entry_if_setup(
 ) -> None:
     """Test calling reset while the entry has been setup."""
     mock_hap = await default_mock_hap_factory.async_get_mock_hap()
-    assert hass.data[HMIPC_DOMAIN][HAPID] == mock_hap
     config_entries = hass.config_entries.async_entries(HMIPC_DOMAIN)
     assert len(config_entries) == 1
+    assert config_entries[0].runtime_data == mock_hap
     # hap_reset is called during unload
     await hass.config_entries.async_unload(config_entries[0].entry_id)
     # entry is unloaded
     assert config_entries[0].state is ConfigEntryState.NOT_LOADED
-    assert hass.data[HMIPC_DOMAIN] == {}
 
 
 async def test_hap_create(
@@ -232,3 +232,41 @@ async def test_auth_create_exception(hass: HomeAssistant, simple_mock_auth) -> N
         ),
     ):
         assert not await hmip_auth.get_auth(hass, HAPID, HAPPIN)
+
+
+async def test_get_state_after_disconnect(
+    hass: HomeAssistant, hmip_config_entry: MockConfigEntry, simple_mock_home
+) -> None:
+    """Test get state after disconnect."""
+    hass.config.components.add(HMIPC_DOMAIN)
+    hap = HomematicipHAP(hass, hmip_config_entry)
+    assert hap
+
+    with patch.object(hap, "get_state") as mock_get_state:
+        assert not hap._ws_connection_closed.is_set()
+
+        await hap.ws_connected_handler()
+        mock_get_state.assert_not_called()
+
+        await hap.ws_disconnected_handler()
+        assert hap._ws_connection_closed.is_set()
+        await hap.ws_connected_handler()
+        mock_get_state.assert_called_once()
+
+
+async def test_async_connect(
+    hass: HomeAssistant, hmip_config_entry: MockConfigEntry, simple_mock_home
+) -> None:
+    """Test async_connect."""
+    hass.config.components.add(HMIPC_DOMAIN)
+    hap = HomematicipHAP(hass, hmip_config_entry)
+    assert hap
+
+    simple_mock_home = AsyncMock(spec=AsyncHome, autospec=True)
+
+    await hap.async_connect(simple_mock_home)
+
+    simple_mock_home.set_on_connected_handler.assert_called_once()
+    simple_mock_home.set_on_disconnected_handler.assert_called_once()
+    simple_mock_home.set_on_reconnect_handler.assert_called_once()
+    simple_mock_home.enable_events.assert_called_once()
