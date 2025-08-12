@@ -144,7 +144,7 @@ httpcore==1.0.9
 hyperframe>=5.2.0
 
 # Ensure we run compatible with musllinux build env
-numpy==2.3.0
+numpy==2.3.2
 pandas==2.3.0
 
 # Constrain multidict to avoid typing issues
@@ -176,12 +176,8 @@ protobuf==6.31.1
 # 2.1.18 is the first version that works with our wheel builder
 faust-cchardet>=2.1.18
 
-# websockets 13.1 is the first version to fully support the new
-# asyncio implementation. The legacy implementation is now
-# deprecated as of websockets 14.0.
-# https://websockets.readthedocs.io/en/13.0.1/howto/upgrade.html#missing-features
-# https://websockets.readthedocs.io/en/stable/howto/upgrade.html
-websockets>=13.1
+# Prevent accidental fallbacks
+websockets>=15.0.1
 
 # pysnmplib is no longer maintained and does not work with newer
 # python
@@ -243,6 +239,9 @@ multidict>=6.4.2
 # Stable Alpine current only ships cargo 1.83.0
 # No wheels upstream available for armhf & armv7
 rpds-py==0.24.0
+
+# Constraint num2words to 0.5.14 as 0.5.15 and 0.5.16 were removed from PyPI
+num2words==0.5.14
 """
 
 GENERATED_MESSAGE = (
