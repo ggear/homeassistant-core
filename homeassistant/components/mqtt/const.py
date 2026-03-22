@@ -71,7 +71,6 @@ CONF_BRIGHTNESS_SCALE = "brightness_scale"
 CONF_BRIGHTNESS_STATE_TOPIC = "brightness_state_topic"
 CONF_BRIGHTNESS_TEMPLATE = "brightness_template"
 CONF_BRIGHTNESS_VALUE_TEMPLATE = "brightness_value_template"
-CONF_COLOR_MODE = "color_mode"
 CONF_COLOR_MODE_STATE_TOPIC = "color_mode_state_topic"
 CONF_COLOR_MODE_VALUE_TEMPLATE = "color_mode_value_template"
 CONF_COLOR_TEMP_COMMAND_TEMPLATE = "color_temp_command_template"
@@ -381,13 +380,13 @@ MQTT_PROCESSED_SUBSCRIPTIONS = "mqtt_processed_subscriptions"
 PAYLOAD_EMPTY_JSON = "{}"
 PAYLOAD_NONE = "None"
 
-CONFIG_ENTRY_VERSION = 1
-CONFIG_ENTRY_MINOR_VERSION = 2
+CONFIG_ENTRY_VERSION = 2
+CONFIG_ENTRY_MINOR_VERSION = 1
 
 # Split mqtt entry data and options
 # Can be removed when config entry is bumped to version 2.1
-# with HA Core 2026.1.0. Read support for version 2.1 is expected before 2026.1
-# From 2026.1 we will write version 2.1
+# with HA Core 2026.7.0. Read support for version 2.1 is expected from 2026.1
+# From 2026.7 we will write version 2.1
 ENTRY_OPTION_FIELDS = (
     CONF_DISCOVERY,
     CONF_DISCOVERY_PREFIX,
