@@ -1,7 +1,5 @@
 """Button platform for Proxmox VE."""
 
-from __future__ import annotations
-
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -143,6 +141,14 @@ VM_BUTTONS: tuple[ProxmoxVMButtonEntityDescription, ...] = (
         translation_key="hibernate",
         press_action=lambda coordinator, node, vmid: (
             coordinator.proxmox.nodes(node).qemu(vmid).status.hibernate.post()
+        ),
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ProxmoxVMButtonEntityDescription(
+        key="resume",
+        translation_key="resume",
+        press_action=lambda coordinator, node, vmid: (
+            coordinator.proxmox.nodes(node).qemu(vmid).status.resume.post()
         ),
         entity_category=EntityCategory.CONFIG,
     ),
@@ -296,7 +302,10 @@ async def async_setup_entry(
 
 
 class ProxmoxBaseButton(ButtonEntity):
-    """Common base for Proxmox buttons. Basically to ensure the async_press logic isn't duplicated."""
+    """Common base for Proxmox buttons.
+
+    Ensures the async_press logic isn't duplicated.
+    """
 
     entity_description: ButtonEntityDescription
     coordinator: ProxmoxCoordinator
