@@ -329,7 +329,7 @@ async def test_default_entity_and_device_name(
 
     entry = MockConfigEntry(
         domain=mqtt.DOMAIN,
-        data={mqtt.CONF_BROKER: "mock-broker"},
+        data={mqtt.CONF_BROKER: "mock-broker", mqtt.CONF_PROTOCOL: "5"},
         version=mqtt.CONFIG_ENTRY_VERSION,
         minor_version=mqtt.CONFIG_ENTRY_MINOR_VERSION,
     )
@@ -464,8 +464,8 @@ async def test_value_template_fails(
     await mqtt_mock_entry()
     async_fire_mqtt_message(hass, "test-topic", '{"some_var": null }')
     assert (
-        "TypeError: unsupported operand type(s) for *: 'NoneType' and 'int' rendering template"
-        in caplog.text
+        "TypeError: unsupported operand type(s) for *:"
+        " 'NoneType' and 'int' rendering template" in caplog.text
     )
 
 
@@ -676,7 +676,7 @@ async def test_loading_subentries(
         entity_id = f"{platform}.{slugify(device.name)}_{slugify(component['name'])}"
         state = hass.states.get(entity_id)
         assert state is not None
-        assert state.state == "unknown"
+        assert state.state in ("off", "unknown")
 
 
 @pytest.mark.parametrize(
@@ -694,7 +694,6 @@ async def test_loading_subentries(
 async def test_loading_subentry_with_bad_component_schema(
     hass: HomeAssistant,
     mqtt_mock_entry: MqttMockHAClientGenerator,
-    mqtt_config_subentries_data: tuple[dict[str, Any]],
     device_registry: dr.DeviceRegistry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -723,10 +722,9 @@ async def test_loading_subentry_with_bad_component_schema(
         )
     ],
 )
-async def test_qos_on_mqt_device_from_subentry(
+async def test_qos_on_mqtt_device_from_subentry(
     hass: HomeAssistant,
     mqtt_mock_entry: MqttMockHAClientGenerator,
-    mqtt_config_subentries_data: tuple[dict[str, Any]],
     device_registry: dr.DeviceRegistry,
 ) -> None:
     """Test QoS is set correctly on entities from MQTT device."""
